@@ -43,6 +43,9 @@ tr.invalid td { color: var(--muted); }
 .err { color: var(--bad); font-size: 14px; }
 button { font: inherit; padding: 6px 12px; border: 1px solid var(--accent); border-radius: 6px; background: var(--accent); color: var(--bg); cursor: pointer; }
 button.secondary { background: transparent; color: var(--accent); }
+.filebtn { display: inline-block; font: inherit; padding: 6px 12px; border: 1px solid var(--accent); border-radius: 6px; background: transparent; color: var(--accent); cursor: pointer; margin: 0; }
+#ioMsg { margin: 0 0 4px; min-height: 1.2em; }
+#ioMsg.err { color: var(--bad); }
 .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
 .scenarios { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
 .shead { display: flex; gap: 6px; margin-bottom: 8px; }

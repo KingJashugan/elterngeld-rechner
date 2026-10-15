@@ -54,17 +54,41 @@
 
   function load() {
     try {
-      const raw = JSON.parse(localStorage.getItem(KEY));
-      if (!raw || !Array.isArray(raw.scenarios) || !Array.isArray(raw.parents) || raw.parents.length !== 2) return;
-      state.parents = raw.parents.map((p) => ({ name: String(p.name || ''), netto: num(p.netto), stundenAlt: Math.max(1, num(p.stundenAlt)) }));
-      state.recht = raw.recht === 'reform' ? 'reform' : 'aktuell';
-      state.bonusReform = raw.bonusReform !== false;
-      state.mutterschutz = raw.mutterschutz !== false;
-      state.geschwister = !!raw.geschwister;
-      state.mehrlinge = Math.min(5, num(raw.mehrlinge));
-      const clean = (p) => ({ ...(p || {}), basisStart: start(p && p.basisStart), plusStart: start(p && p.plusStart) });
-      state.scenarios = raw.scenarios.map((s) => scen(String(s.name || ''), clean(s.p1), clean(s.p2), num(s.bonus), start(s.bonusStart)));
+      applyState(JSON.parse(localStorage.getItem(KEY)));
     } catch (e) { /* ohne Speicher weiterarbeiten */ }
+  }
+
+  // Übernimmt einen gespeicherten/importierten Stand. Alle Werte werden einzeln geprüft und begrenzt,
+  // unbekannte Felder werden verworfen. Gibt true zurück, wenn der Stand brauchbar war.
+  const MAX_SZENARIEN = 30;
+  function applyState(raw) {
+    if (!raw || typeof raw !== 'object' || !Array.isArray(raw.scenarios) || !Array.isArray(raw.parents) || raw.parents.length !== 2) return false;
+    const text = (v, max, fallback) => String(v == null ? '' : v).slice(0, max).trim() || fallback;
+    const cleanP = (p) => {
+      p = p && typeof p === 'object' ? p : {};
+      return {
+        basis: Math.min(14, Math.floor(num(p.basis))), plus: Math.min(28, Math.floor(num(p.plus))),
+        hPlus: Math.min(60, num(p.hPlus)), hBonus: Math.min(60, num(p.hBonus)),
+        nettoPlus: opt(p.nettoPlus), nettoBonus: opt(p.nettoBonus),
+        basisStart: start(p.basisStart), plusStart: start(p.plusStart),
+      };
+    };
+    const parents = raw.parents.map((p, i) => ({
+      name: text(p && p.name, 60, i === 0 ? 'Ich (Vater)' : 'Partnerin (Mutter)'),
+      netto: Math.min(100000, num(p && p.netto)), stundenAlt: Math.min(60, Math.max(1, num(p && p.stundenAlt))),
+    }));
+    const scenarios = raw.scenarios.slice(0, MAX_SZENARIEN).map((s) => {
+      s = s && typeof s === 'object' ? s : {};
+      return scen(text(s.name, 80, 'Szenario'), cleanP(s.p1), cleanP(s.p2), Math.min(4, Math.floor(num(s.bonus))), start(s.bonusStart));
+    });
+    state.parents = parents;
+    state.recht = raw.recht === 'reform' ? 'reform' : 'aktuell';
+    state.bonusReform = raw.bonusReform !== false;
+    state.mutterschutz = raw.mutterschutz !== false;
+    state.geschwister = !!raw.geschwister;
+    state.mehrlinge = Math.min(5, Math.floor(num(raw.mehrlinge)));
+    state.scenarios = scenarios;
+    return true;
   }
   function save() {
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ignorieren */ }
@@ -281,6 +305,55 @@
     renderResults();
   }
 
+  // ---------- Export / Import als Datei ----------
+  const FORMAT = 'elterngeld-rechner';
+  const MAX_DATEI = 1024 * 1024; // 1 MB reicht weit
+  function meldung(text, fehler) {
+    const el = $('#ioMsg');
+    el.textContent = text;
+    el.classList.toggle('err', !!fehler);
+  }
+
+  function exportFile() {
+    readDom();
+    const daten = { format: FORMAT, version: 1, exportiert: new Date().toISOString(), ...JSON.parse(JSON.stringify(state)) };
+    const blob = new Blob([JSON.stringify(daten, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `elterngeld-szenarien-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    meldung(`${state.scenarios.length} Szenarien exportiert (Datei im Download-Ordner).`);
+  }
+
+  function importFile(file) {
+    if (!file) return;
+    if (file.size > MAX_DATEI) { meldung('Datei zu groß (max. 1 MB).', true); return; }
+    const reader = new FileReader();
+    reader.onerror = () => meldung('Datei konnte nicht gelesen werden.', true);
+    reader.onload = () => {
+      let raw;
+      try { raw = JSON.parse(String(reader.result)); } catch (e) { meldung('Keine gültige JSON-Datei.', true); return; }
+      if (!raw || raw.format !== FORMAT) { meldung('Das ist keine Export-Datei dieses Rechners.', true); return; }
+      readDom();
+      const vorher = JSON.stringify(state);
+      const eigene = !sindBeispiele(state.recht);
+      if (eigene && !window.confirm('Der aktuelle Stand (inkl. eurer Szenarien) wird durch die Datei ersetzt. Fortfahren?')) { meldung('Import abgebrochen.'); return; }
+      if (!applyState(raw)) { applyState(JSON.parse(vorher)); meldung('Die Datei hat nicht das erwartete Format.', true); return; }
+      save();
+      writeParents();
+      renderCards();
+      updateRecht();
+      updateNames();
+      renderResults();
+      meldung(`${state.scenarios.length} Szenarien importiert.`);
+    };
+    reader.readAsText(file);
+  }
+
   // ---------- Aktionen ----------
   function act(a, id) {
     readDom();
@@ -297,7 +370,11 @@
     renderResults();
   }
 
+  document.addEventListener('change', (ev) => {
+    if (ev.target.id === 'importFile') { importFile(ev.target.files && ev.target.files[0]); ev.target.value = ''; }
+  });
   document.addEventListener('input', (ev) => {
+    if (ev.target.id === 'importFile') return;
     const t = ev.target;
     if (t.dataset && t.dataset.sk) {
       if (/Start$/.test(t.dataset.sk)) t.dataset.explicit = '1'; // Regler bewegt: fester Startmonat
@@ -324,6 +401,7 @@
   document.addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-act]');
     if (!b) return;
+    if (b.dataset.act === 'export') { exportFile(); return; }
     if (b.dataset.act === 'auto') { // Startmonat wieder automatisch
       const sl = $(`input[data-sk="${b.dataset.sk}"]`, b.closest('.scen'));
       if (sl) { sl.dataset.explicit = '0'; update(); }

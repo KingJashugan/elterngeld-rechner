@@ -53,7 +53,11 @@
   <div class="toolbar">
     <button type="button" data-act="add">+ Neues Szenario</button>
     <button type="button" data-act="reset" class="secondary">Beispiele wiederherstellen</button>
+    <button type="button" data-act="export" class="secondary">Exportieren (Datei)</button>
+    <label class="filebtn">Importieren (Datei)<input type="file" id="importFile" accept=".json,application/json" hidden></label>
   </div>
+  <p id="ioMsg" class="hint" role="status"></p>
+  <p class="hint">Export/Import sichert alle Eingaben und Szenarien als Datei, zum Beispiel für ein zweites Gerät oder als Backup. Die Datei bleibt bei dir und wird nicht hochgeladen. Ein Import ersetzt den aktuellen Stand.</p>
   <div id="scen" class="scenarios"></div>
 
   <h2>Gegenüberstellung <small id="rechtBadge"></small></h2>
