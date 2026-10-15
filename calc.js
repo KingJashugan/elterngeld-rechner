@@ -189,6 +189,7 @@
   function zeitplan(sc, ms, opts) {
     ms = ms || 0;
     const parallelErlaubt = !!(opts && opts.parallelBasisErlaubt);
+    if (Array.isArray(sc.p1.blocks) || Array.isArray(sc.p2.blocks)) return zeitplanBloecke(sc, ms, parallelErlaubt);
     const n = (x) => Math.max(0, Math.floor(Number(x) || 0));
     const st = (x, d) => (Number.isFinite(x) && x >= 1 ? Math.floor(x) : d);
     const a = { basis: n(sc.p1.basis), plus: n(sc.p1.plus) };
@@ -206,7 +207,6 @@
     const aEndP = a.plus > 0 ? aStartP + a.plus - 1 : 0;
     const bonusStart = st(sc.bonusStart, Math.max(mEndB, aEndB, mEndP, aEndP) + 1);
 
-    const fehler = [], hinweise = [];
     const rows = { p1: [], p2: [] };
     const konflikt = { p1: false, p2: false };
     const put = (who, from, count, typ) => {
@@ -223,6 +223,12 @@
     put('p1', bonusStart, bonus, 'K');
     put('p2', bonusStart, bonus, 'K');
 
+    return auswerten(rows, konflikt, { p1: { basis: aStartB, plus: aStartP }, p2: { basis: mStartB, plus: mStartP }, bonus: bonusStart }, parallelErlaubt);
+  }
+
+  // Prüft einen belegten Zeitplan (Überschneidung, Fristen, Parallelbezug) und liefert das Ergebnis von zeitplan().
+  function auswerten(rows, konflikt, starts, parallelErlaubt) {
+    const fehler = [], hinweise = [];
     if (konflikt.p1) fehler.push('Elternteil 1: Zeiträume überschneiden sich');
     if (konflikt.p2) fehler.push('Elternteil 2: Zeiträume überschneiden sich');
     let spaetB = false, spaetP = false, last = 0, parallel = 0;
@@ -248,9 +254,46 @@
 
     return {
       rows, laenge: Math.max(C.BASIS_BIS_LM, last), ende: last,
-      starts: { p1: { basis: aStartB, plus: aStartP }, p2: { basis: mStartB, plus: mStartP }, bonus: bonusStart },
+      starts,
       fehler, hinweise,
     };
+  }
+
+  // Zeitplan aus frei eintragbaren Blöcken: sc.p1.blocks / sc.p2.blocks = [{ typ: 'basis'|'plus', start?, n }].
+  // Ohne start folgt ein Block direkt auf den vorigen desselben Elternteils. Die Mutter beginnt hinter dem
+  // Mutterschutz (Monat 1..ms, immer Basis); der Vater beginnt hinter dem letzten Basis-Block der Mutter.
+  // Bonus (beide gleichzeitig) beginnt ohne bonusStart hinter allem anderen.
+  // Rückgabe wie zeitplan(), dazu starts.blocks = wirksame Startmonate je Block (gleiche Reihenfolge wie die Eingabe).
+  function zeitplanBloecke(sc, ms, parallelErlaubt) {
+    const n = (x) => Math.max(0, Math.floor(Number(x) || 0));
+    const st = (x) => (Number.isFinite(x) && x >= 1 ? Math.floor(x) : undefined);
+    const lies = (p) => (Array.isArray(p.blocks) ? p.blocks : []).map((b) => ({ typ: b && b.typ === 'plus' ? 'plus' : 'basis', start: st(b && b.start), n: n(b && b.n) }));
+    const lege = (liste, cursor) => liste.map((b) => {
+      const start = b.start || cursor;
+      cursor = start + b.n;
+      return { ...b, start };
+    });
+    const m = lege(lies(sc.p2), ms + 1);
+    const mEndBasis = m.reduce((e, b) => (b.typ === 'basis' && b.n > 0 ? Math.max(e, b.start + b.n - 1) : e), ms);
+    const a = lege(lies(sc.p1), mEndBasis + 1);
+    const ende = (liste) => liste.reduce((e, b) => (b.n > 0 ? Math.max(e, b.start + b.n - 1) : e), 0);
+    const bonus = n(sc.bonus);
+    const bonusStart = st(sc.bonusStart) || Math.max(ms, ende(m), ende(a)) + 1;
+
+    const rows = { p1: [], p2: [] };
+    const konflikt = { p1: false, p2: false };
+    const put = (who, from, count, typ) => {
+      for (let i = 0; i < count; i++) {
+        const mo = from + i;
+        if (rows[who][mo]) { rows[who][mo] = 'X'; konflikt[who] = true; } else rows[who][mo] = typ;
+      }
+    };
+    put('p2', 1, ms, 'M');
+    m.forEach((b) => put('p2', b.start, b.n, b.typ === 'plus' ? 'P' : 'B'));
+    a.forEach((b) => put('p1', b.start, b.n, b.typ === 'plus' ? 'P' : 'B'));
+    put('p1', bonusStart, bonus, 'K');
+    put('p2', bonusStart, bonus, 'K');
+    return auswerten(rows, konflikt, { blocks: { p1: a.map((b) => b.start), p2: m.map((b) => b.start) }, bonus: bonusStart }, parallelErlaubt);
   }
 
   const api = { C, RECHT, ersatzrate, basisMonat, plusMonat, zuschlaege, elternteil, szenario, zeitplan };

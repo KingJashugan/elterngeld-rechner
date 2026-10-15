@@ -165,6 +165,32 @@ test('Zeitplan: Regler-Startwerte, Überschneidung, Fristen, Parallelbezug', () 
   assert.equal(zp.hinweise.length, 0);
 });
 
+test('Zeitplan: Blöcke (aufgeteilt, mit Pause, automatischer Start)', () => {
+  const typ = (zp, who, from, to) => Array.from({ length: to - from + 1 }, (_, i) => zp.rows[who][from + i] || '.').join('');
+  const blk = (typ, n, start) => ({ typ, n, start });
+  // Vater: 2 Monate Basis ab Monat 1, Pause, 2 Monate Basis ab Monat 6 (Mutter ohne Mutterschutz-Basis)
+  let zp = E.zeitplan({ p1: { blocks: [blk('basis', 2, 1), blk('basis', 2, 6)] }, p2: { blocks: [] }, bonus: 0 }, 0);
+  assert.equal(typ(zp, 'p1', 1, 8), 'BB...BB.');
+  assert.equal(zp.fehler.length, 0);
+  // Ohne Start folgt der nächste Block direkt: Mutter 2 Mutterschutz + 3 Basis + 4 Plus, Vater hinter ihrer Basis
+  zp = E.zeitplan({ p1: { blocks: [blk('basis', 2)] }, p2: { blocks: [blk('basis', 3), blk('plus', 4)] }, bonus: 0 }, 2);
+  assert.equal(typ(zp, 'p2', 1, 9), 'MMBBBPPPP');
+  assert.equal(typ(zp, 'p1', 6, 7), 'BB');
+  assert.deepEqual(zp.starts.blocks.p2, [3, 6]);
+  assert.deepEqual(zp.starts.blocks.p1, [6]);
+  // Eigener Start eines Blocks verschiebt auch die folgenden automatischen Blöcke
+  zp = E.zeitplan({ p1: { blocks: [blk('plus', 2, 10), blk('plus', 2)] }, p2: { blocks: [] }, bonus: 0 }, 0);
+  assert.equal(typ(zp, 'p1', 10, 13), 'PPPP');
+  // Überschneidung und Frist gelten auch für Blöcke
+  zp = E.zeitplan({ p1: { blocks: [blk('basis', 3, 1), blk('basis', 2, 3)] }, p2: { blocks: [] }, bonus: 0 }, 0);
+  assert.ok(zp.fehler.some((f) => f.includes('überschneiden')));
+  zp = E.zeitplan({ p1: { blocks: [blk('basis', 2, 14)] }, p2: { blocks: [] }, bonus: 0 }, 0);
+  assert.ok(zp.fehler.some((f) => f.includes('14. Lebensmonat')));
+  // Bonus automatisch hinter allen Blöcken
+  zp = E.zeitplan({ p1: { blocks: [blk('plus', 4, 3)] }, p2: { blocks: [blk('plus', 6)] }, bonus: 2 }, 2);
+  assert.equal(zp.starts.bonus, 9);
+});
+
 test('Mindestens 2 Monate je Elternteil (wie im offiziellen Planer)', () => {
   const p = { netto: 2000, stundenAlt: 40, stundenPlus: 20, stundenBonus: 28 };
   const e = E.elternteil(p, {});
