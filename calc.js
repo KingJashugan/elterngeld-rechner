@@ -111,7 +111,7 @@
     const equiv = (x) => x.basis + x.plus / 2;
     if (equiv(plan.p1) > C.MONTHS_BASE) fehler.push('Elternteil 1: mehr als 12 Basismonate-Äquivalent');
     if (equiv(plan.p2) > C.MONTHS_BASE) fehler.push('Elternteil 2: mehr als 12 Basismonate-Äquivalent');
-    if (equiv(plan.p1) + equiv(plan.p2) > C.MONTHS_TOTAL) fehler.push('Zusammen mehr als 14 Basismonate-Äquivalent');
+    if (equiv(plan.p1) + equiv(plan.p2) > C.MONTHS_TOTAL) fehler.push('Zusammen mehr als 14 Basismonate-Äquivalent' + (ms ? ' (inkl. Mutterschutz-Monate der Mutter; 1 Basis = 2 Plus)' : ' (1 Basis = 2 Plus)'));
     const bonus = plan.p1.bonus + plan.p2.bonus;
     if (bonus > 0) {
       if (plan.p1.bonus !== plan.p2.bonus) fehler.push('Partnerschaftsbonus: beide gleich viele Monate');

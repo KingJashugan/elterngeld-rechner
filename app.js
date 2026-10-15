@@ -1,6 +1,6 @@
 (function () {
   const E = window.Elterngeld;
-  const KEY = 'egr-state-v1';
+  const KEY = 'egr-state-v2'; // v2: Mutterschutz-Regel, neue Beispiele (alter Stand v1 wird nicht übernommen)
   const eur = (x) => x.toLocaleString('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
   const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0) + ' %';
   const $ = (s, r) => (r || document).querySelector(s);
@@ -15,11 +15,14 @@
   const scen = (name, p1, p2, bonus) => ({ id: nextId++, name, p1: sp(p1), p2: sp(p2), bonus: bonus || 0 });
   // Elternteil 1 = Vater, Elternteil 2 = Mutter (inkl. 2 Monate Mutterschutz in ihren Basis-Monaten)
   const MUTTERSCHUTZ_MONATE = 2;
+  // Kontingent: 14 Basis-Monate, Plus zählt halb. Mutter: 2 Mutterschutz-Monate sind immer Basis.
+  // Mutter 2 Basis + 12 Plus = 8, Vater 12 Plus = 6, zusammen 14.
   const beispiele = () => [
     scen('Mutter 12, Vater 2 Monate Basis', { basis: 2 }, { basis: 12 }),
     scen('Mutter 7, Vater 7 Monate Basis', { basis: 7 }, { basis: 7 }),
-    scen('Mutter 2 Basis + 10 Plus, Vater 14 Plus (je 20 Std.)', { plus: 14 }, { plus: 10 }),
-    scen('wie zuvor, dazu Bonus 4 Monate (je 28 Std.)', { plus: 14 }, { plus: 10 }, 4),
+    scen('Vater 12 Basis, Mutter nur Mutterschutz (2)', { basis: 12 }, { basis: 2 }),
+    scen('Mutter 2 Basis + 12 Plus, Vater 12 Plus (je 20 Std.)', { plus: 12 }, { plus: 12 }),
+    scen('wie zuvor, dazu Bonus 4 Monate (je 28 Std.)', { plus: 12 }, { plus: 12 }, 4),
   ];
   const state = {
     parents: [
@@ -85,7 +88,7 @@
     const row = (p, i) => `
       <div class="prow">
         <strong class="pn">${esc(state.parents[i].name)}</strong>
-        <label>Basis-Monate<input type="number" min="0" max="14" step="1" data-k="${p}.basis" value="${s[p].basis}"></label>
+        <label>${p === 'p2' && state.mutterschutz ? 'Basis-Monate (inkl. 2 Mutterschutz, mind. 2)' : 'Basis-Monate'}<input type="number" min="${p === 'p2' && state.mutterschutz ? MUTTERSCHUTZ_MONATE : 0}" max="14" step="1" data-k="${p}.basis" value="${p === 'p2' && state.mutterschutz ? Math.max(s[p].basis, MUTTERSCHUTZ_MONATE) : s[p].basis}"></label>
         <label>Plus-Monate<input type="number" min="0" max="28" step="1" data-k="${p}.plus" value="${s[p].plus}"></label>
         <label>Std./Woche Plus<input type="number" min="0" max="60" step="0.5" data-k="${p}.hPlus" value="${s[p].hPlus}"></label>
         <label>Std./Woche Bonus<input type="number" min="0" max="60" step="0.5" data-k="${p}.hBonus" value="${s[p].hBonus}"></label>
@@ -170,7 +173,7 @@
   function act(a, id) {
     readDom();
     const i = state.scenarios.findIndex((s) => String(s.id) === String(id));
-    if (a === 'add') state.scenarios.push(scen('Szenario ' + (state.scenarios.length + 1), { basis: 12 }, { basis: 2 }));
+    if (a === 'add') state.scenarios.push(scen('Szenario ' + (state.scenarios.length + 1), { basis: 2 }, { basis: 12 }));
     else if (a === 'dup' && i >= 0) {
       const c = JSON.parse(JSON.stringify(state.scenarios[i]));
       state.scenarios.splice(i + 1, 0, scen((c.name || 'Szenario') + ' (Kopie)', c.p1, c.p2, c.bonus));
@@ -182,7 +185,18 @@
     renderResults();
   }
 
-  document.addEventListener('input', update);
+  document.addEventListener('input', (ev) => {
+    update();
+    if (ev.target.id === 'mutterschutz') { renderCards(); renderResults(); } // Beschriftung/Mindestwert der Mutter-Basis-Monate
+  });
+  // Beim Verlassen des Felds: Basis-Monate der Mutter auf mindestens 2 anheben (nicht während des Tippens)
+  document.addEventListener('change', (ev) => {
+    const t = ev.target;
+    if (state.mutterschutz && t.dataset && t.dataset.k === 'p2.basis' && num(t.value) < MUTTERSCHUTZ_MONATE) {
+      t.value = MUTTERSCHUTZ_MONATE;
+      update();
+    }
+  });
   document.addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-act]');
     if (b) act(b.dataset.act, b.closest('.scen')?.dataset.id);
