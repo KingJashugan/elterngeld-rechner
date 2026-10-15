@@ -271,27 +271,29 @@
   // Rechenweg als Karte je Szenario (Mini-Tabelle statt langer Textliste)
   function verlustKarte(x) {
     const [n1, n2] = state.parents.map((p) => esc(p.name));
-    const kopf = `<h4>${esc(x.s.name || 'Szenario')} <span class="neg">Verlust ${eur(x.r.verlustElterngeld)}</span></h4>`;
+    const kopf = `<h4><span>${esc(x.s.name || 'Szenario')}</span> <span class="neg">Verlust ${eur(x.r.verlustElterngeld)}</span></h4>`;
     if (!x.ok) return `<article class="vcard" id="vc-${x.s.id}">${kopf}<p class="vnote">Szenario ungültig, daher kein Rechenweg.</p></article>`;
-    const zeilen = [];
+    const bloecke = [];
     [['p1', x.e1, n1], ['p2', x.e2, n2]].forEach(([w, e, n]) => {
       [['plus', 'Plus', x.s[w].plus, x.s[w].hPlus], ['bonus', 'Bonus', x.s.bonus, x.s[w].hBonus]].forEach(([k, label, monate, std]) => {
         if (!(monate > 0)) return;
         const b = e[k], max = e.ohneArbeit.plus, proMonat = max - b.mitZuschlag, anteil = b.rate * b.diff;
-        const grund = b.kappung === 'min' ? ' · unter dem Mindestbetrag, gezahlt wird dieser'
-          : anteil >= b.halbOhneEinkommen ? ' · erreicht die Obergrenze (½ Basis)' : '';
-        zeilen.push(`<tr><th scope="row">${n}<br><small>${label}, ${monate} Mon., ${std.toLocaleString('de-DE')} Std.</small></th>`
-          + `<td>${eur2(b.nettoNachher)}</td><td><strong>${eur2(b.mitZuschlag)}</strong><br><small>statt ${eur2(max)}</small></td>`
-          + `<td class="${proMonat > 0 ? 'neg' : ''}">${proMonat > 0 ? `${eur2(proMonat)} × ${monate}<br><strong>${eur2(proMonat * monate)}</strong>` : 'kein Verlust'}</td></tr>`
-          + `<tr class="calc"><td colspan="4">${rate(b.rate)} × (${eur2(b.bemessung)} − ${eur2(b.nettoNachher)}) = ${eur2(anteil)}${grund}. Obergrenze ½ Basis: ${eur2(b.halbOhneEinkommen)}.</td></tr>`);
+        const grund = b.kappung === 'min' ? ' Das liegt unter dem Mindestbetrag, gezahlt wird dieser.'
+          : anteil >= b.halbOhneEinkommen ? ' Das erreicht die Obergrenze (½ Basis).' : '';
+        bloecke.push(`<section class="vblock"><div class="vwer"><strong>${n}</strong> <small>${label} · ${monate} Monate · ${std.toLocaleString('de-DE')} Std./Woche</small></div>`
+          + `<dl class="vzahlen">`
+          + `<div><dt>Netto Teilzeit</dt><dd>${eur2(b.nettoNachher)}</dd></div>`
+          + `<div><dt>Elterngeld pro Monat</dt><dd><strong>${eur2(b.mitZuschlag)}</strong><small>statt ${eur2(max)}</small></dd></div>`
+          + `<div><dt>Verlust</dt><dd class="${proMonat > 0 ? 'neg' : ''}">${proMonat > 0 ? `<strong>${eur2(proMonat * monate)}</strong><small>${eur2(proMonat)} × ${monate}</small>` : '<strong>kein Verlust</strong>'}</dd></div>`
+          + `</dl>`
+          + `<p class="vformel">${rate(b.rate)} × (${eur2(b.bemessung)} − ${eur2(b.nettoNachher)}) = ${eur2(anteil)}.${grund} Obergrenze ½ Basis: ${eur2(b.halbOhneEinkommen)}.</p></section>`);
       });
     });
     const notes = [];
-    if (x.s.p1.basis > 0 || x.s.p2.basis > 0 || x.r.basis2 > x.r.mutterschutz) notes.push('Basis-Monate ohne Arbeit: volles Elterngeld, kein Verlust.');
+    if (x.s.p1.basis > 0 || x.r.basis2 > x.r.mutterschutz) notes.push('Basis-Monate ohne Arbeit: volles Elterngeld, kein Verlust.');
     if (x.r.mutterschutz > 0) notes.push(`Mutterschutz (${x.r.mutterschutz} Monate): Mutterschaftsgeld wird angerechnet, kein zusätzliches Elterngeld, zählt nicht als Verlust.`);
-    if (!zeilen.length) notes.push('Keine Plus- oder Bonus-Monate: volles Elterngeld ohne Anrechnung.');
-    const tabelle = zeilen.length ? `<table><thead><tr><th>Wer</th><th>Teilzeit-Netto</th><th>Elterngeld/Monat</th><th>Verlust</th></tr></thead><tbody>${zeilen.join('')}</tbody></table>` : '';
-    return `<article class="vcard" id="vc-${x.s.id}">${kopf}${tabelle}${notes.map((t) => `<p class="vnote">${t}</p>`).join('')}`
+    if (!bloecke.length) notes.push('Keine Plus- oder Bonus-Monate: volles Elterngeld ohne Anrechnung.');
+    return `<article class="vcard" id="vc-${x.s.id}">${kopf}${bloecke.join('')}${notes.map((t) => `<p class="vnote">${t}</p>`).join('')}`
       + `<p class="sum">Maximum ${eur(x.r.maximum)} − Elterngeld ${eur(x.r.elterngeld)} = <strong class="neg">${eur(x.r.verlustElterngeld)}</strong></p></article>`;
   }
 
