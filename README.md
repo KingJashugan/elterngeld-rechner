@@ -17,6 +17,13 @@ Live: https://kingjashugan.github.io/elterngeld-rechner/
 - In Basis-Monaten wird nicht gearbeitet; Plus- und Bonus-Monate haben getrennte Wochenstunden
 - Elterngeld nur bis 32 Std./Woche; Partnerschaftsbonus nur bei 24–32 Std./Woche in den Bonus-Monaten
 
+## Regeln, die gegen den offiziellen Planer geprüft wurden (Stand Oktober 2026, Geburten bis Oktober 2027)
+- Monatsbeträge werden auf volle Euro aufgerundet (1279,10 € → 1.280 €).
+- Jeder Elternteil, der Elterngeld nimmt, braucht mindestens 2 Monate (Basis oder Plus); 2 Plus-Monate genügen auch neben 12 Basis-Monaten des anderen.
+- Mutterschutz-Monate der Mutter zählen als Basis ohne Betrag (Mutterschaftsgeld wird angerechnet).
+- Gleichzeitiges Basis bei beiden: im 1.–12. Lebensmonat nur 1 Monat (der Mutterschutz-Monat zählt mit), Plus parallel ist erlaubt. Bei Mehrlingen wird nur ein Hinweis gezeigt.
+- Nicht berücksichtigt: Referentenentwurf vom Juli 2026 (12 statt 14 Monate, 330–1.900 €), frühestens für Geburten ab November 2027.
+
 ## Abgleich mit dem offiziellen Rechner
 Formel (Ersatzrate, Mindest-/Höchstbeträge, Plus = min(½ Basis, Basis mit Einkommen)) gegen den [Elterngeldrechner des Familienportals](https://familienportal.de/familienportal/meta/egr) geprüft, siehe `calc.test.js`. Der offizielle Rechner nimmt Brutto-Eingaben und schätzt das Netto selbst (Brutto − 102,50 € Werbungskostenpauschale − pauschale Abgaben); dieser Rechner nimmt das Netto direkt.
 

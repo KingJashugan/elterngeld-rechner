@@ -198,7 +198,7 @@
       const e1 = E.elternteil(mk(a, s.p1), opts), e2 = E.elternteil(mk(b, s.p2), opts);
       const plan = { p1: { basis: s.p1.basis, plus: s.p1.plus, bonus: s.bonus }, p2: { basis: s.p2.basis, plus: s.p2.plus, bonus: s.bonus } };
       const r = E.szenario(plan, e1, e2, a, b, ms());
-      const zp = E.zeitplan(s, ms());
+      const zp = E.zeitplan(s, ms(), { parallelBasisErlaubt: state.mehrlinge > 0 });
       const warn = [...r.fehler, ...zp.fehler];
       if (r.monate === 0) warn.push('Keine Monate eingetragen.');
       return { s, r, zp, warn, ok: warn.length === 0 };

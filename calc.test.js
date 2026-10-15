@@ -152,9 +152,51 @@ test('Zeitplan: Regler-Startwerte, Überschneidung, Fristen, Parallelbezug', () 
   assert.ok(zp.fehler.some((f) => f.includes('überschneiden')));
   // Vater-Basis parallel zur Mutter in 3 Monaten: nur Hinweis, kein Fehler
   zp = E.zeitplan({ p1: { basis: 3, plus: 0, basisStart: 3 }, p2: { basis: 6, plus: 0 }, bonus: 0 }, 2);
-  assert.equal(zp.fehler.length, 0);
+  assert.ok(zp.fehler.some((f) => f.includes('nur für 1 Monat'))); // wie im offiziellen Planer gesperrt
+  zp = E.zeitplan({ p1: { basis: 3, plus: 0, basisStart: 3 }, p2: { basis: 6, plus: 0 }, bonus: 0 }, 2, { parallelBasisErlaubt: true });
+  assert.equal(zp.fehler.length, 0); // Ausnahme (z. B. Mehrlinge): nur Hinweis
   assert.ok(zp.hinweise.length > 0);
+  // Plus parallel zum anderen Elternteil bleibt erlaubt
+  zp = E.zeitplan({ p1: { basis: 0, plus: 6, plusStart: 3 }, p2: { basis: 0, plus: 6 }, bonus: 0 }, 2);
+  assert.equal(zp.fehler.length, 0);
+  assert.equal(zp.hinweise.length, 0);
   // 1 Monat parallel (Mutterschutz-Monat 2 + Vater-Basis ab Monat 2) ist erlaubt
   zp = E.zeitplan({ p1: { basis: 1, plus: 0, basisStart: 2 }, p2: { basis: 2, plus: 0 }, bonus: 0 }, 2);
   assert.equal(zp.hinweise.length, 0);
+});
+
+test('Mindestens 2 Monate je Elternteil (wie im offiziellen Planer)', () => {
+  const p = { netto: 2000, stundenAlt: 40, stundenPlus: 20, stundenBonus: 28 };
+  const e = E.elternteil(p, {});
+  const z = (basis, plus) => ({ basis, plus, bonus: 0 });
+  // Mutter 12 (inkl. Mutterschutz) + Vater 1 Basis-Monat: ungültig
+  let r = E.szenario({ p1: z(1, 0), p2: z(12, 0) }, e, e, p, p, 2);
+  assert.ok(r.fehler.some((f) => f.includes('mindestens 2 Monate')));
+  // Vater 1 Plus-Monat: ungültig; 2 Plus-Monate neben Mutter 12: gültig (offizieller Planer)
+  r = E.szenario({ p1: z(0, 1), p2: z(12, 0) }, e, e, p, p, 2);
+  assert.ok(r.fehler.some((f) => f.includes('mindestens 2 Monate')));
+  r = E.szenario({ p1: z(0, 2), p2: z(12, 0) }, e, e, p, p, 2);
+  assert.equal(r.fehler.length, 0);
+  // Mutter nur Mutterschutz (2 Monate) + Vater 12: gültig
+  r = E.szenario({ p1: z(12, 0), p2: z(0, 0) }, e, e, p, p, 2);
+  assert.equal(r.fehler.length, 0);
+  // Ohne Mutterschutz: Mutter mit nur 1 Plus-Monat ist ungültig
+  r = E.szenario({ p1: z(2, 0), p2: z(0, 1) }, e, e, p, p, 0);
+  assert.ok(r.fehler.some((f) => f.includes('Elternteil 2')));
+});
+
+// Offizieller Planer (familienportal.de/egr, Okt. 2026, Geburt 05/2027, RLP): Mutter 3.000 € brutto, Vater 3.800 € brutto,
+// Mutter 12 Monate (2 Mutterschutz), Vater 2 Monate Basis: Mutter 12.800 €, Vater 3.140 €, zusammen 15.940 €.
+// Netto-Werte rückgerechnet aus den angezeigten Beträgen (1279,10 € bzw. 1569,26 € bei 65 %).
+test('Abgleich Zwei-Personen-Planung mit offiziellem Planer (Aufrunden auf volle Euro)', () => {
+  const mutter = { netto: 1279.1 / 0.65, stundenAlt: 40, stundenPlus: 0, stundenBonus: 0 };
+  const vater = { netto: 1569.26 / 0.65, stundenAlt: 40, stundenPlus: 0, stundenBonus: 0 };
+  const em = E.elternteil(mutter, {}), ev = E.elternteil(vater, {});
+  near(em.basis.betrag, 1280, 0.001);
+  near(ev.basis.betrag, 1570, 0.001);
+  const r = E.szenario({ p1: { basis: 2, plus: 0, bonus: 0 }, p2: { basis: 12, plus: 0, bonus: 0 } }, ev, em, vater, mutter, 2);
+  assert.equal(r.fehler.length, 0);
+  near(r.t2.elterngeld, 12800, 0.001);
+  near(r.t1.elterngeld, 3140, 0.001);
+  near(r.elterngeld, 15940, 0.001);
 });

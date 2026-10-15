@@ -20,6 +20,8 @@
   };
 
   const round2 = (x) => Math.round(x * 100) / 100;
+  // Monatsbeträge werden auf volle Euro aufgerundet (so zeigt es der offizielle Planer: 1279,10 → 1.280 €).
+  const aufEuro = (x) => Math.ceil(round2(x) - 1e-9);
 
   // Ersatzrate abhängig vom Netto vor der Geburt (gedeckelt bei 2.770 €).
   function ersatzrate(nettoVorher) {
@@ -40,7 +42,7 @@
     return {
       rate, bemessung, nettoNachher: Math.max(0, nettoNachher), diff,
       roh: round2(roh),
-      betrag: round2(betrag),
+      betrag: aufEuro(betrag),
       kappung: roh < C.BASIS_MIN ? 'min' : roh > C.BASIS_MAX ? 'max' : null,
     };
   }
@@ -55,7 +57,7 @@
     return {
       rate: mit.rate, bemessung: mit.bemessung, nettoNachher: mit.nettoNachher,
       diff: mit.diff, roh: round2(roh), halbOhneEinkommen: round2(halb),
-      betrag: round2(betrag),
+      betrag: aufEuro(betrag),
       kappung: roh < C.PLUS_MIN ? 'min' : roh > C.PLUS_MAX ? 'max' : null,
     };
   }
@@ -70,7 +72,7 @@
     if (opts && opts.mehrlinge > 0) {
       b += opts.mehrlinge * (plus ? C.MEHRLING_ZUSCHLAG / 2 : C.MEHRLING_ZUSCHLAG);
     }
-    return round2(b);
+    return aufEuro(b);
   }
 
   // Monatsbeträge eines Elternteils.
@@ -111,6 +113,11 @@
     const ms = mutterschutz || 0;
     plan = { p1: plan.p1, p2: { ...plan.p2, basis: Math.max(plan.p2.basis, ms) } };
     const equiv = (x) => x.basis + x.plus / 2;
+    // Wer Elterngeld nimmt, braucht mindestens 2 Monate (Basis oder Plus). Der offizielle Planer lehnt 1 Monat ab.
+    [[plan.p1, 'Elternteil 1'], [plan.p2, 'Elternteil 2']].forEach(([pl, n]) => {
+      const bezug = pl.basis + pl.plus;
+      if (bezug > 0 && bezug < 2) fehler.push(`${n}: mindestens 2 Monate Elterngeld (Basis oder Plus)`);
+    });
     if (equiv(plan.p1) > C.MONTHS_BASE) fehler.push('Elternteil 1: mehr als 12 Basismonate-Äquivalent');
     if (equiv(plan.p2) > C.MONTHS_BASE) fehler.push('Elternteil 2: mehr als 12 Basismonate-Äquivalent');
     if (equiv(plan.p1) + equiv(plan.p2) > C.MONTHS_TOTAL) fehler.push('Zusammen mehr als 14 Basismonate-Äquivalent' + (ms ? ' (inkl. Mutterschutz-Monate der Mutter; 1 Basis = 2 Plus)' : ' (1 Basis = 2 Plus)'));
@@ -166,8 +173,10 @@
   // Bonus am Ende (beide gleichzeitig).
   // Rückgabe: rows (Typ je Monat: M Mutterschutz, B Basis, P Plus, K Bonus, X Überschneidung),
   // laenge, starts (wirksame Startmonate), fehler (ungültig), hinweise (nur Warnung).
-  function zeitplan(sc, ms) {
+  // opts.parallelBasisErlaubt: gleichzeitiges Basis in mehreren Monaten erlaubt (Ausnahmen, z. B. Mehrlinge)
+  function zeitplan(sc, ms, opts) {
     ms = ms || 0;
+    const parallelErlaubt = !!(opts && opts.parallelBasisErlaubt);
     const n = (x) => Math.max(0, Math.floor(Number(x) || 0));
     const st = (x, d) => (Number.isFinite(x) && x >= 1 ? Math.floor(x) : d);
     const a = { basis: n(sc.p1.basis), plus: n(sc.p1.plus) };
@@ -217,7 +226,13 @@
     }
     if (spaetB) fehler.push(`Basiselterngeld nur bis zum ${C.BASIS_BIS_LM}. Lebensmonat`);
     if (spaetP) fehler.push(`Plus/Bonus nur bis zum ${C.PLUS_BIS_LM}. Lebensmonat`);
-    if (parallel > 1) hinweise.push(`Basiselterngeld bei beiden gleichzeitig in ${parallel} Monaten – im 1.–12. Lebensmonat ist das nur für 1 Monat vorgesehen (Ausnahmen möglich).`);
+    if (parallel > 1) {
+      // Offizieller Planer sperrt gleichzeitiges Basis nach dem ersten gemeinsamen Monat (1.–12. Lebensmonat);
+      // der Mutterschutz-Monat der Mutter zählt als Basis. Plus parallel bleibt erlaubt.
+      const text = `Basiselterngeld bei beiden gleichzeitig in ${parallel} Monaten: im 1.–12. Lebensmonat nur für 1 Monat möglich (Mutterschutz zählt mit).`;
+      if (parallelErlaubt) hinweise.push(text + ' Ausnahme (z. B. Mehrlinge) angenommen.');
+      else fehler.push(text);
+    }
 
     return {
       rows, laenge: Math.max(C.BASIS_BIS_LM, last), ende: last,
