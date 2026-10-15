@@ -86,6 +86,19 @@ button.secondary { background: transparent; color: var(--accent); }
 h2 small { font-size: 13px; font-weight: 400; color: var(--c-k); }
 .note { margin: 8px 0 0; font-size: 13px; color: var(--c-k); }
 #vergleich td .tl-grid { min-width: 140px; }
+/* Info-Symbol mit Mouse-Over (auch per Tastatur-Fokus und Antippen) */
+.tip { position: relative; display: inline-block; margin-left: 4px; color: var(--accent); cursor: help; font-weight: 400; outline-offset: 2px; }
+.tip-box { display: none; position: absolute; left: 0; top: 1.6em; z-index: 20; width: min(320px, 80vw); padding: 10px 12px; background: var(--card); color: var(--text); border: 1px solid var(--accent); border-radius: 8px; box-shadow: 0 6px 18px rgba(0, 0, 0, .35); font-size: 13px; line-height: 1.45; font-weight: 400; text-align: left; }
+.tip:hover .tip-box, .tip:focus .tip-box, .tip:focus-within .tip-box { display: block; }
+#vergleich th[scope=row] { z-index: 2; }
+#vergleich th[scope=row]:has(.tip:hover), #vergleich th[scope=row]:has(.tip:focus) { z-index: 30; }
+/* Aufklappbarer Rechenweg */
+details.why { margin-top: 6px; font-size: 13px; }
+details.why summary { cursor: pointer; color: var(--accent); }
+details.why ul { margin: 6px 0 0; padding-left: 16px; display: grid; gap: 8px; }
+details.why li { color: var(--text); }
+details.why .sum { margin: 8px 0 0; padding-top: 6px; border-top: 1px dashed var(--border); }
+#vergleich td:has(details.why[open]) { min-width: 280px; }
 #vergleich th, #vergleich td { text-align: left; vertical-align: top; white-space: normal; min-width: 150px; }
 #vergleich th[scope=row] { min-width: 160px; position: sticky; left: 0; background: var(--card); }
 #vergleich td.best { background: color-mix(in srgb, var(--ok) 14%, transparent); }

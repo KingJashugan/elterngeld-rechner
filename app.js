@@ -2,7 +2,9 @@
   const E = window.Elterngeld;
   const KEY = 'egr-state-v2'; // v2: Mutterschutz-Regel, neue Beispiele (alter Stand v1 wird nicht übernommen)
   const eur = (x) => x.toLocaleString('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+  const eur2 = (x) => x.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
   const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0) + ' %';
+  const rate = (r) => (r * 100).toLocaleString('de-DE', { maximumFractionDigits: 1 }) + ' %';
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => [...(r || document).querySelectorAll(s)];
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -255,8 +257,47 @@
       const zp = E.zeitplan(s, ms(), { parallelBasisErlaubt: state.mehrlinge > 0 });
       const warn = [...r.fehler, ...zp.fehler];
       if (r.monate === 0) warn.push('Keine Monate eingetragen.');
-      return { s, r, zp, warn, ok: warn.length === 0 };
+      return { s, r, zp, e1, e2, warn, ok: warn.length === 0 };
     });
+  }
+
+  // ---------- Erklärung: Verlust beim Elterngeld ----------
+  const VERLUST_ERKLAERUNG = 'Verglichen wird mit dem Elterngeld, das für dieselben Monate ohne Arbeit gezahlt würde (Maximum). '
+    + 'Ein Verlust entsteht nur in Plus- und Bonus-Monaten mit Teilzeit: Das Teilzeit-Netto wird angerechnet. '
+    + 'Elterngeld = Ersatzrate (meist 65 %) × (Netto vor Geburt − Teilzeit-Netto), höchstens die Hälfte des Basis-Betrags, mindestens der Mindestbetrag. '
+    + 'Je mehr du in Teilzeit verdienst, desto weniger Elterngeld. Basis-Monate ohne Arbeit und Mutterschutz-Monate bringen keinen Verlust. '
+    + 'Monatsbeträge werden auf volle Euro aufgerundet. '
+    + 'Aufklappen unter dem Betrag zeigt den Rechenweg für das Szenario.';
+  const offen = new Set(); // aufgeklappte Rechenwege überleben das Neuzeichnen der Tabelle
+
+  function verlustHtml(x) {
+    const [n1, n2] = state.parents.map((p) => esc(p.name));
+    const items = [];
+    [['p1', x.e1, n1], ['p2', x.e2, n2]].forEach(([w, e, n]) => {
+      const stdAlt = state.parents[w === 'p1' ? 0 : 1].stundenAlt.toLocaleString('de-DE');
+      [['plus', 'Plus', x.s[w].plus, x.s[w].hPlus], ['bonus', 'Bonus', x.s.bonus, x.s[w].hBonus]].forEach(([k, label, monate, std]) => {
+        if (!(monate > 0)) return;
+        const b = e[k], max = e.ohneArbeit.plus, proMonat = max - b.mitZuschlag;
+        const anteil = b.rate * b.diff;
+        const grund = b.kappung === 'min' ? ' (liegt unter dem Mindestbetrag, gezahlt wird dieser)'
+          : anteil >= b.halbOhneEinkommen ? ' (erreicht die Obergrenze von ½ Basis)' : '';
+        items.push(`<li><strong>${n} · ${label}, ${monate} Monate</strong> bei ${std.toLocaleString('de-DE')} von ${stdAlt} Std./Woche<br>`
+          + `Teilzeit-Netto ${eur2(b.nettoNachher)} wird angerechnet: ${rate(b.rate)} × (${eur2(b.bemessung)} − ${eur2(b.nettoNachher)}) = ${eur2(anteil)}${grund}.<br>`
+          + `Obergrenze ohne Arbeit (½ Basis): ${eur2(b.halbOhneEinkommen)}. Gezahlt: ${eur2(b.mitZuschlag)} statt ${eur2(max)} pro Monat`
+          + (proMonat > 0 ? ` → <span class="neg">Verlust ${eur2(proMonat)} × ${monate} = ${eur2(proMonat * monate)}</span>` : ' → <strong>kein Verlust</strong>') + '.</li>');
+      });
+    });
+    const hat = (w, k) => x.s[w][k] > 0;
+    if (hat('p1', 'basis') || hat('p2', 'basis') || x.r.basis2 > x.r.mutterschutz) {
+      items.push('<li><strong>Basis-Monate</strong> ohne Arbeit: es gibt das volle Elterngeld, also kein Verlust.</li>');
+    }
+    if (x.r.mutterschutz > 0) {
+      items.push(`<li><strong>Mutterschutz (${x.r.mutterschutz} Monate)</strong>: Das Mutterschaftsgeld wird angerechnet, deshalb gibt es kein zusätzliches Elterngeld. Diese Monate zählen nicht als Verlust.</li>`);
+    }
+    if (!items.length) items.push('<li>Keine Plus- oder Bonus-Monate: Es gibt volles Elterngeld ohne Anrechnung.</li>');
+    return `<details class="why" data-sid="${x.s.id}"${offen.has(x.s.id) ? ' open' : ''}><summary>Woher kommt das?</summary>`
+      + `<ul>${items.join('')}</ul>`
+      + `<p class="sum">Summe: Maximum ${eur(x.r.maximum)} − Elterngeld ${eur(x.r.elterngeld)} = <strong class="neg">${eur(x.r.verlustElterngeld)}</strong></p></details>`;
   }
 
   function renderResults() {
@@ -286,7 +327,9 @@
       ['Teilzeit-Netto in Bezugsmonaten', (x) => eur(x.r.lohn), null],
       ['Einkommen gesamt (Elterngeld + Teilzeit)', (x) => `<strong>${eur(x.r.gesamt)}</strong><span class="bar" style="width:${bestSumme ? (x.r.gesamt / bestSumme) * 100 : 0}%"></span>`, (x) => (x.r.gesamt === bestSumme ? 'best' : '')],
       ['Max. Elterngeld ohne Arbeit', (x) => eur(x.r.maximum), null],
-      ['Verlust beim Elterngeld', (x) => `<strong class="neg">${eur(x.r.verlustElterngeld)}</strong><br><small>${pct(x.r.verlustElterngeld, x.r.maximum)} vom Maximum</small>`, (x) => (x.r.verlustElterngeld === bestEg ? 'best' : '')],
+      [`Verlust beim Elterngeld <span class="tip" tabindex="0" aria-label="Erklärung zum Verlust beim Elterngeld">ⓘ<span class="tip-box" role="tooltip">${esc(VERLUST_ERKLAERUNG)}</span></span>`,
+        (x) => `<strong class="neg">${eur(x.r.verlustElterngeld)}</strong><br><small>${pct(x.r.verlustElterngeld, x.r.maximum)} vom Maximum</small>${verlustHtml(x)}`,
+        (x) => (x.r.verlustElterngeld === bestEg ? 'best' : '')],
       ['Netto bei Vollverdienst (gleiche Monate)', (x) => eur(x.r.referenz), null],
       ['Verlust ggü. Vollverdienst', (x) => `<strong class="neg">${eur(x.r.verlust)}</strong><br><small>${pct(x.r.verlust, x.r.referenz)} vom Vollverdienst</small>`, (x) => (x.r.verlust === bestVerlust ? 'best' : '')],
     ];
@@ -370,6 +413,14 @@
     renderResults();
   }
 
+  // Aufgeklappte Rechenwege merken (toggle bubbelt nicht, daher Capture)
+  document.addEventListener('toggle', (ev) => {
+    const d = ev.target;
+    if (d.matches && d.matches('details.why[data-sid]')) {
+      const id = Number(d.dataset.sid);
+      if (d.open) offen.add(id); else offen.delete(id);
+    }
+  }, true);
   document.addEventListener('change', (ev) => {
     if (ev.target.id === 'importFile') { importFile(ev.target.files && ev.target.files[0]); ev.target.value = ''; }
   });
