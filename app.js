@@ -267,37 +267,32 @@
     + 'Elterngeld = Ersatzrate (meist 65 %) × (Netto vor Geburt − Teilzeit-Netto), höchstens die Hälfte des Basis-Betrags, mindestens der Mindestbetrag. '
     + 'Je mehr du in Teilzeit verdienst, desto weniger Elterngeld. Basis-Monate ohne Arbeit und Mutterschutz-Monate bringen keinen Verlust. '
     + 'Monatsbeträge werden auf volle Euro aufgerundet. '
-    + 'Aufklappen unter dem Betrag zeigt den Rechenweg für das Szenario.';
-  const offen = new Set(); // aufgeklappte Rechenwege überleben das Neuzeichnen der Tabelle
-
-  function verlustHtml(x) {
+    + 'Der Link „Woher kommt das?“ unter dem Betrag öffnet den Rechenweg unter der Tabelle.';
+  // Rechenweg als Karte je Szenario (Mini-Tabelle statt langer Textliste)
+  function verlustKarte(x) {
     const [n1, n2] = state.parents.map((p) => esc(p.name));
-    const items = [];
+    const kopf = `<h4>${esc(x.s.name || 'Szenario')} <span class="neg">Verlust ${eur(x.r.verlustElterngeld)}</span></h4>`;
+    if (!x.ok) return `<article class="vcard" id="vc-${x.s.id}">${kopf}<p class="vnote">Szenario ungültig, daher kein Rechenweg.</p></article>`;
+    const zeilen = [];
     [['p1', x.e1, n1], ['p2', x.e2, n2]].forEach(([w, e, n]) => {
-      const stdAlt = state.parents[w === 'p1' ? 0 : 1].stundenAlt.toLocaleString('de-DE');
       [['plus', 'Plus', x.s[w].plus, x.s[w].hPlus], ['bonus', 'Bonus', x.s.bonus, x.s[w].hBonus]].forEach(([k, label, monate, std]) => {
         if (!(monate > 0)) return;
-        const b = e[k], max = e.ohneArbeit.plus, proMonat = max - b.mitZuschlag;
-        const anteil = b.rate * b.diff;
-        const grund = b.kappung === 'min' ? ' (liegt unter dem Mindestbetrag, gezahlt wird dieser)'
-          : anteil >= b.halbOhneEinkommen ? ' (erreicht die Obergrenze von ½ Basis)' : '';
-        items.push(`<li><strong>${n} · ${label}, ${monate} Monate</strong> bei ${std.toLocaleString('de-DE')} von ${stdAlt} Std./Woche<br>`
-          + `Teilzeit-Netto ${eur2(b.nettoNachher)} wird angerechnet: ${rate(b.rate)} × (${eur2(b.bemessung)} − ${eur2(b.nettoNachher)}) = ${eur2(anteil)}${grund}.<br>`
-          + `Obergrenze ohne Arbeit (½ Basis): ${eur2(b.halbOhneEinkommen)}. Gezahlt: ${eur2(b.mitZuschlag)} statt ${eur2(max)} pro Monat`
-          + (proMonat > 0 ? ` → <span class="neg">Verlust ${eur2(proMonat)} × ${monate} = ${eur2(proMonat * monate)}</span>` : ' → <strong>kein Verlust</strong>') + '.</li>');
+        const b = e[k], max = e.ohneArbeit.plus, proMonat = max - b.mitZuschlag, anteil = b.rate * b.diff;
+        const grund = b.kappung === 'min' ? ' · unter dem Mindestbetrag, gezahlt wird dieser'
+          : anteil >= b.halbOhneEinkommen ? ' · erreicht die Obergrenze (½ Basis)' : '';
+        zeilen.push(`<tr><th scope="row">${n}<br><small>${label}, ${monate} Mon., ${std.toLocaleString('de-DE')} Std.</small></th>`
+          + `<td>${eur2(b.nettoNachher)}</td><td><strong>${eur2(b.mitZuschlag)}</strong><br><small>statt ${eur2(max)}</small></td>`
+          + `<td class="${proMonat > 0 ? 'neg' : ''}">${proMonat > 0 ? `${eur2(proMonat)} × ${monate}<br><strong>${eur2(proMonat * monate)}</strong>` : 'kein Verlust'}</td></tr>`
+          + `<tr class="calc"><td colspan="4">${rate(b.rate)} × (${eur2(b.bemessung)} − ${eur2(b.nettoNachher)}) = ${eur2(anteil)}${grund}. Obergrenze ½ Basis: ${eur2(b.halbOhneEinkommen)}.</td></tr>`);
       });
     });
-    const hat = (w, k) => x.s[w][k] > 0;
-    if (hat('p1', 'basis') || hat('p2', 'basis') || x.r.basis2 > x.r.mutterschutz) {
-      items.push('<li><strong>Basis-Monate</strong> ohne Arbeit: es gibt das volle Elterngeld, also kein Verlust.</li>');
-    }
-    if (x.r.mutterschutz > 0) {
-      items.push(`<li><strong>Mutterschutz (${x.r.mutterschutz} Monate)</strong>: Das Mutterschaftsgeld wird angerechnet, deshalb gibt es kein zusätzliches Elterngeld. Diese Monate zählen nicht als Verlust.</li>`);
-    }
-    if (!items.length) items.push('<li>Keine Plus- oder Bonus-Monate: Es gibt volles Elterngeld ohne Anrechnung.</li>');
-    return `<details class="why" data-sid="${x.s.id}"${offen.has(x.s.id) ? ' open' : ''}><summary>Woher kommt das?</summary>`
-      + `<ul>${items.join('')}</ul>`
-      + `<p class="sum">Summe: Maximum ${eur(x.r.maximum)} − Elterngeld ${eur(x.r.elterngeld)} = <strong class="neg">${eur(x.r.verlustElterngeld)}</strong></p></details>`;
+    const notes = [];
+    if (x.s.p1.basis > 0 || x.s.p2.basis > 0 || x.r.basis2 > x.r.mutterschutz) notes.push('Basis-Monate ohne Arbeit: volles Elterngeld, kein Verlust.');
+    if (x.r.mutterschutz > 0) notes.push(`Mutterschutz (${x.r.mutterschutz} Monate): Mutterschaftsgeld wird angerechnet, kein zusätzliches Elterngeld, zählt nicht als Verlust.`);
+    if (!zeilen.length) notes.push('Keine Plus- oder Bonus-Monate: volles Elterngeld ohne Anrechnung.');
+    const tabelle = zeilen.length ? `<table><thead><tr><th>Wer</th><th>Teilzeit-Netto</th><th>Elterngeld/Monat</th><th>Verlust</th></tr></thead><tbody>${zeilen.join('')}</tbody></table>` : '';
+    return `<article class="vcard" id="vc-${x.s.id}">${kopf}${tabelle}${notes.map((t) => `<p class="vnote">${t}</p>`).join('')}`
+      + `<p class="sum">Maximum ${eur(x.r.maximum)} − Elterngeld ${eur(x.r.elterngeld)} = <strong class="neg">${eur(x.r.verlustElterngeld)}</strong></p></article>`;
   }
 
   function renderResults() {
@@ -328,7 +323,7 @@
       ['Einkommen gesamt (Elterngeld + Teilzeit)', (x) => `<strong>${eur(x.r.gesamt)}</strong><span class="bar" style="width:${bestSumme ? (x.r.gesamt / bestSumme) * 100 : 0}%"></span>`, (x) => (x.r.gesamt === bestSumme ? 'best' : '')],
       ['Max. Elterngeld ohne Arbeit', (x) => eur(x.r.maximum), null],
       [`Verlust beim Elterngeld <span class="tip" tabindex="0" aria-label="Erklärung zum Verlust beim Elterngeld">ⓘ<span class="tip-box" role="tooltip">${esc(VERLUST_ERKLAERUNG)}</span></span>`,
-        (x) => `<strong class="neg">${eur(x.r.verlustElterngeld)}</strong><br><small>${pct(x.r.verlustElterngeld, x.r.maximum)} vom Maximum</small>${verlustHtml(x)}`,
+        (x) => `<strong class="neg">${eur(x.r.verlustElterngeld)}</strong><br><small>${pct(x.r.verlustElterngeld, x.r.maximum)} vom Maximum</small><br><button type="button" class="linkbtn" data-act="why" data-sid="${x.s.id}">Woher kommt das? ↓</button>`,
         (x) => (x.r.verlustElterngeld === bestEg ? 'best' : '')],
       ['Netto bei Vollverdienst (gleiche Monate)', (x) => eur(x.r.referenz), null],
       ['Verlust ggü. Vollverdienst', (x) => `<strong class="neg">${eur(x.r.verlust)}</strong><br><small>${pct(x.r.verlust, x.r.referenz)} vom Vollverdienst</small>`, (x) => (x.r.verlust === bestVerlust ? 'best' : '')],
@@ -337,6 +332,7 @@
     const body = rows.map(([label, fn, cls]) => `<tr><th scope="row">${label}</th>${res.map((x) => cell(x, fn, cls)).join('')}</tr>`);
     // Zeitplan zeigt auch ungültige Szenarien (dort sieht man, was nicht passt)
     body.splice(2, 0, `<tr><th scope="row">Zeitplan</th>${res.map((x) => `<td>${barsHtml(x.zp, true)}<small>bis Lebensmonat ${x.zp.ende}</small></td>`).join('')}</tr>`);
+    $('#verlustCards').innerHTML = res.map(verlustKarte).join('');
     $('#vergleich').innerHTML = res.length ? head + body.join('') : '<tr><td>Noch kein Szenario. Mit „+ Neues Szenario“ anlegen.</td></tr>';
   }
 
@@ -413,14 +409,6 @@
     renderResults();
   }
 
-  // Aufgeklappte Rechenwege merken (toggle bubbelt nicht, daher Capture)
-  document.addEventListener('toggle', (ev) => {
-    const d = ev.target;
-    if (d.matches && d.matches('details.why[data-sid]')) {
-      const id = Number(d.dataset.sid);
-      if (d.open) offen.add(id); else offen.delete(id);
-    }
-  }, true);
   document.addEventListener('change', (ev) => {
     if (ev.target.id === 'importFile') { importFile(ev.target.files && ev.target.files[0]); ev.target.value = ''; }
   });
@@ -452,6 +440,16 @@
   document.addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-act]');
     if (!b) return;
+    if (b.dataset.act === 'why') { // Rechenweg-Feld unter der Tabelle öffnen und zur passenden Karte springen
+      $('#verlustPanel').open = true;
+      const karte = $('#vc-' + b.dataset.sid);
+      if (karte) {
+        karte.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        karte.classList.add('flash');
+        setTimeout(() => karte.classList.remove('flash'), 1800);
+      }
+      return;
+    }
     if (b.dataset.act === 'export') { exportFile(); return; }
     if (b.dataset.act === 'auto') { // Startmonat wieder automatisch
       const sl = $(`input[data-sk="${b.dataset.sk}"]`, b.closest('.scen'));

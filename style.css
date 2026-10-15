@@ -7,7 +7,7 @@
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-main { max-width: 960px; margin: 0 auto; padding: 16px; }
+main { max-width: 1240px; margin: 0 auto; padding: 16px; }
 h1 { margin: 8px 0; }
 h2 { margin-top: 32px; }
 .lead, .hint { color: var(--muted); }
@@ -92,13 +92,7 @@ h2 small { font-size: 13px; font-weight: 400; color: var(--c-k); }
 .tip:hover .tip-box, .tip:focus .tip-box, .tip:focus-within .tip-box { display: block; }
 #vergleich th[scope=row] { z-index: 2; }
 #vergleich th[scope=row]:has(.tip:hover), #vergleich th[scope=row]:has(.tip:focus) { z-index: 30; }
-/* Aufklappbarer Rechenweg */
-details.why { margin-top: 6px; font-size: 13px; }
-details.why summary { cursor: pointer; color: var(--accent); }
-details.why ul { margin: 6px 0 0; padding-left: 16px; display: grid; gap: 8px; }
-details.why li { color: var(--text); }
-details.why .sum { margin: 8px 0 0; padding-top: 6px; border-top: 1px dashed var(--border); }
-#vergleich td:has(details.why[open]) { min-width: 280px; }
+
 #vergleich th, #vergleich td { text-align: left; vertical-align: top; white-space: normal; min-width: 150px; }
 #vergleich th[scope=row] { min-width: 160px; position: sticky; left: 0; background: var(--card); }
 #vergleich td.best { background: color-mix(in srgb, var(--ok) 14%, transparent); }
@@ -106,3 +100,19 @@ details.why .sum { margin: 8px 0 0; padding-top: 6px; border-top: 1px dashed var
 #vergleich small { color: var(--muted); font-weight: normal; }
 .disclaimer { margin-top: 32px; font-size: 13px; color: var(--muted); }
 a { color: var(--accent); }
+
+/* Rechenweg-Feld unter der Gegenüberstellung: breit, Karten nebeneinander */
+.linkbtn { background: none; border: 0; padding: 2px 0; color: var(--accent); font-size: 12px; text-decoration: underline; cursor: pointer; }
+.panel { margin: 12px 0; padding: 10px 14px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; }
+.panel > summary { cursor: pointer; font-weight: 600; color: var(--accent); }
+.vgrid { display: grid; gap: 12px; margin-top: 12px; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+.vcard { padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); transition: box-shadow .3s; }
+.vcard.flash { box-shadow: 0 0 0 3px var(--accent); }
+.vcard h4 { margin: 0 0 8px; font-size: 14px; display: flex; justify-content: space-between; gap: 8px; }
+.vcard table { width: 100%; font-size: 13px; background: none; }
+.vcard th, .vcard td { padding: 4px 6px; white-space: normal; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
+.vcard thead th { color: var(--muted); font-size: 12px; }
+.vcard tr.calc td { color: var(--muted); font-size: 12px; border-bottom: 1px solid var(--border); padding-top: 0; }
+.vcard small { color: var(--muted); font-weight: 400; }
+.vnote { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+.vcard .sum { margin: 8px 0 0; padding-top: 6px; border-top: 1px dashed var(--border); font-size: 13px; }
