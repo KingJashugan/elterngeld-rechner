@@ -18,6 +18,10 @@ h2 { margin-top: 32px; }
 .card input.name { font-weight: 600; font-size: 16px; }
 input[type=range] { width: 100%; accent-color: var(--accent); }
 legend { padding: 0 6px; }
+.card details { margin: 10px 0; font-size: 14px; color: var(--muted); }
+.card summary { cursor: pointer; }
+.warn { margin: 8px 0 0; font-size: 13px; color: var(--bad); }
+.card output { color: var(--accent); }
 .opts { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 8px 24px; }
 .opts label.inline { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--text); }
 .scroll { overflow-x: auto; }

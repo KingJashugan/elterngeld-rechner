@@ -17,23 +17,39 @@
       <legend><input type="text" class="name" value="Ich" aria-label="Name Elternteil 1"></legend>
       <label>Netto pro Monat vor der Geburt (Ø 12 Monate), €
         <input type="number" class="netto" min="0" step="10" value="3000"></label>
-      <label>Arbeit in Basis-Monaten: <output class="o-basis">0 %</output>
-        <input type="range" class="arbeit-basis" min="0" max="100" step="5" value="0"></label>
-      <label>Arbeit in Plus-/Bonus-Monaten: <output class="o-plus">50 %</output>
-        <input type="range" class="arbeit-plus" min="0" max="100" step="5" value="50"></label>
-      <label>Wochenstunden in Plus-/Bonus-Monaten
-        <input type="number" class="stunden" min="0" max="60" step="1" value="25"></label>
+      <label>Bisherige Wochenstunden
+        <input type="number" class="stunden-alt" min="1" max="60" step="0.5" value="40"></label>
+      <label>Wochenstunden in Basis-Monaten <output class="o-basis"></output>
+        <input type="number" class="stunden-basis" min="0" max="60" step="0.5" value="0"></label>
+      <label>Wochenstunden in Plus-/Bonus-Monaten <output class="o-plus"></output>
+        <input type="number" class="stunden-plus" min="0" max="60" step="0.5" value="25"></label>
+      <details>
+        <summary>Teilzeit-Netto selbst eintragen (optional)</summary>
+        <label>Netto/Monat in Basis-Monaten, €
+          <input type="number" class="netto-basis" min="0" step="10" placeholder="Schätzung"></label>
+        <label>Netto/Monat in Plus-/Bonus-Monaten, €
+          <input type="number" class="netto-plus" min="0" step="10" placeholder="Schätzung"></label>
+      </details>
+      <p class="warn" hidden></p>
     </fieldset>
     <fieldset class="card" id="p2">
       <legend><input type="text" class="name" value="Partnerin" aria-label="Name Elternteil 2"></legend>
       <label>Netto pro Monat vor der Geburt (Ø 12 Monate), €
         <input type="number" class="netto" min="0" step="10" value="2200"></label>
-      <label>Arbeit in Basis-Monaten: <output class="o-basis">0 %</output>
-        <input type="range" class="arbeit-basis" min="0" max="100" step="5" value="0"></label>
-      <label>Arbeit in Plus-/Bonus-Monaten: <output class="o-plus">50 %</output>
-        <input type="range" class="arbeit-plus" min="0" max="100" step="5" value="50"></label>
-      <label>Wochenstunden in Plus-/Bonus-Monaten
-        <input type="number" class="stunden" min="0" max="60" step="1" value="25"></label>
+      <label>Bisherige Wochenstunden
+        <input type="number" class="stunden-alt" min="1" max="60" step="0.5" value="40"></label>
+      <label>Wochenstunden in Basis-Monaten <output class="o-basis"></output>
+        <input type="number" class="stunden-basis" min="0" max="60" step="0.5" value="0"></label>
+      <label>Wochenstunden in Plus-/Bonus-Monaten <output class="o-plus"></output>
+        <input type="number" class="stunden-plus" min="0" max="60" step="0.5" value="25"></label>
+      <details>
+        <summary>Teilzeit-Netto selbst eintragen (optional)</summary>
+        <label>Netto/Monat in Basis-Monaten, €
+          <input type="number" class="netto-basis" min="0" step="10" placeholder="Schätzung"></label>
+        <label>Netto/Monat in Plus-/Bonus-Monaten, €
+          <input type="number" class="netto-plus" min="0" step="10" placeholder="Schätzung"></label>
+      </details>
+      <p class="warn" hidden></p>
     </fieldset>
   </section>
 
@@ -58,7 +74,7 @@
   </form>
   <div id="customOut"></div>
 
-  <p class="disclaimer">Unverbindliche Schätzung nach BEEG (Stand der Regeln: Geburten ab 2025). Maßgeblich ist der Bescheid deiner Elterngeldstelle. Nicht berücksichtigt: Einkommensgrenze (175.000 € zu versteuerndes Einkommen), Begrenzung gleichzeitigen Bezugs, Steuern auf das Teilzeitgehalt, Mutterschaftsgeld. Offizieller Rechner: <a href="https://www.bmfsfj.de/bmfsfj/service/elterngeld-plus-rechner" rel="noopener">BMFSFJ</a>.</p>
+  <p class="disclaimer">Unverbindliche Schätzung nach BEEG (Stand der Regeln: Geburten ab 2025). Maßgeblich ist der Bescheid deiner Elterngeldstelle. Das Teilzeit-Netto wird proportional zu den Stunden geschätzt; real sinkt das Netto weniger stark (Steuerprogression). Der offizielle Rechner liegt deshalb bei Teilzeit meist niedriger. Trage das Teilzeit-Netto aus deiner Prognose ein, wenn du es kennst. Nicht berücksichtigt: Einkommensgrenze (175.000 € zu versteuerndes Einkommen), Begrenzung gleichzeitigen Bezugs, Steuern auf das Teilzeitgehalt, Mutterschaftsgeld. Offizieller Rechner: <a href="https://www.bmfsfj.de/bmfsfj/service/elterngeld-plus-rechner" rel="noopener">BMFSFJ</a>.</p>
 </main>
 <script src="calc.js"></script>
 <script src="app.js"></script>

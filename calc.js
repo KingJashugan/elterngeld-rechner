@@ -72,17 +72,22 @@
   }
 
   // Monatsbeträge eines Elternteils.
-  // p: { netto, arbeitBasis (0..1), arbeitPlus (0..1), stunden }
+  // p: { netto, stundenAlt, stundenBasis, stundenPlus, nettoBasis?, nettoPlus? }
+  // Netto in der Elternzeit = Netto × (Stunden neu / Stunden alt), außer nettoBasis/nettoPlus ist angegeben.
   function elternteil(p, opts) {
-    const nBasis = p.netto * p.arbeitBasis;
-    const nPlus = p.netto * p.arbeitPlus;
+    const anteil = (h) => (p.stundenAlt > 0 ? Math.min(1, Math.max(0, h) / p.stundenAlt) : 0);
+    const gegeben = (x) => typeof x === 'number' && Number.isFinite(x);
+    const nBasis = gegeben(p.nettoBasis) ? p.nettoBasis : p.netto * anteil(p.stundenBasis);
+    const nPlus = gegeben(p.nettoPlus) ? p.nettoPlus : p.netto * anteil(p.stundenPlus);
     const b = basisMonat(p.netto, nBasis);
     const pl = plusMonat(p.netto, nPlus);
     return {
-      basis: { ...b, nettoNachher: nBasis, mitZuschlag: zuschlaege(b.betrag, 'basis', opts) },
-      plus: { ...pl, nettoNachher: nPlus, mitZuschlag: zuschlaege(pl.betrag, 'plus', opts) },
-      // Bonusmonat wird wie ein Plusmonat berechnet
-      bonusMoeglich: p.stunden >= C.BONUS_H_MIN && p.stunden <= C.BONUS_H_MAX,
+      basis: { ...b, nettoNachher: nBasis, anteil: anteil(p.stundenBasis), mitZuschlag: zuschlaege(b.betrag, 'basis', opts) },
+      plus: { ...pl, nettoNachher: nPlus, anteil: anteil(p.stundenPlus), mitZuschlag: zuschlaege(pl.betrag, 'plus', opts) },
+      // Elterngeld nur bis 32 Wochenstunden; Bonusmonat wird wie ein Plusmonat berechnet
+      basisErlaubt: p.stundenBasis <= C.BONUS_H_MAX,
+      plusErlaubt: p.stundenPlus <= C.BONUS_H_MAX,
+      bonusMoeglich: p.stundenPlus >= C.BONUS_H_MIN && p.stundenPlus <= C.BONUS_H_MAX,
     };
   }
 
@@ -101,12 +106,17 @@
       if (!e1.bonusMoeglich || !e2.bonusMoeglich) fehler.push('Partnerschaftsbonus: beide müssen 24–32 Std./Woche arbeiten');
     }
 
+    [[plan.p1, e1, 'Elternteil 1'], [plan.p2, e2, 'Elternteil 2']].forEach(([pl, e, n]) => {
+      if (pl.basis > 0 && !e.basisErlaubt) fehler.push(`${n}: in Basis-Monaten mehr als 32 Std./Woche`);
+      if (pl.plus + pl.bonus > 0 && !e.plusErlaubt) fehler.push(`${n}: in Plus-/Bonus-Monaten mehr als 32 Std./Woche`);
+    });
+
     const teil = (e, pl, p) => {
       const gBasis = pl.basis * e.basis.mitZuschlag;
       const gPlus = pl.plus * e.plus.mitZuschlag;
       const gBonus = pl.bonus * e.plus.mitZuschlag;
       const elterngeld = gBasis + gPlus + gBonus;
-      const lohn = pl.basis * p.netto * p.arbeitBasis + (pl.plus + pl.bonus) * p.netto * p.arbeitPlus;
+      const lohn = pl.basis * e.basis.nettoNachher + (pl.plus + pl.bonus) * e.plus.nettoNachher;
       const monate = pl.basis + pl.plus + pl.bonus;
       const referenz = monate * p.netto; // Netto ohne Elternzeit in denselben Monaten
       return {

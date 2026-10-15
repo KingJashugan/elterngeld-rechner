@@ -11,10 +11,17 @@
     return {
       name: $('.name', el).value.trim() || id,
       netto: Math.max(0, parseFloat($('.netto', el).value) || 0),
-      arbeitBasis: (parseFloat($('.arbeit-basis', el).value) || 0) / 100,
-      arbeitPlus: (parseFloat($('.arbeit-plus', el).value) || 0) / 100,
-      stunden: parseFloat($('.stunden', el).value) || 0,
+      stundenAlt: Math.max(1, parseFloat($('.stunden-alt', el).value) || 0),
+      stundenBasis: Math.max(0, parseFloat($('.stunden-basis', el).value) || 0),
+      stundenPlus: Math.max(0, parseFloat($('.stunden-plus', el).value) || 0),
+      nettoBasis: optNum($('.netto-basis', el)),
+      nettoPlus: optNum($('.netto-plus', el)),
     };
+  }
+
+  function optNum(input) {
+    const v = parseFloat(input.value);
+    return Number.isFinite(v) ? Math.max(0, v) : undefined;
   }
 
   function monatBlock(p, e) {
@@ -26,14 +33,14 @@
       ${row('Berücksichtigt (max. 2.770 €)', eur2(b.bemessung))}
       ${row('Ersatzrate', pct(b.rate))}
       </dl>
-      <p class="sub">Basiselterngeld bei ${Math.round(p.arbeitBasis * 100)} % Arbeit</p><dl>
+      <p class="sub">Basiselterngeld bei ${p.stundenBasis.toLocaleString('de-DE')} von ${p.stundenAlt.toLocaleString('de-DE')} Std./Woche</p><dl>
       ${row('Netto in Elternzeit', eur2(b.nettoNachher))}
       ${row('Wegfallendes Einkommen', eur2(b.diff))}
       ${row('× Ersatzrate', eur2(b.roh))}
       ${row('Elterngeld / Monat' + kapp(b.kappung), eur2(b.mitZuschlag), 'ok')}
       ${row('Haushalts-Effekt / Monat', eur2(b.mitZuschlag + b.nettoNachher - p.netto), b.mitZuschlag + b.nettoNachher - p.netto < 0 ? 'neg' : '')}
       </dl>
-      <p class="sub">ElterngeldPlus / Bonus bei ${Math.round(p.arbeitPlus * 100)} % Arbeit</p><dl>
+      <p class="sub">ElterngeldPlus / Bonus bei ${p.stundenPlus.toLocaleString('de-DE')} von ${p.stundenAlt.toLocaleString('de-DE')} Std./Woche</p><dl>
       ${row('Netto in Elternzeit', eur2(pl.nettoNachher))}
       ${row('Max. (½ Basis ohne Einkommen)', eur2(pl.halbOhneEinkommen))}
       ${row('Anteil aus Einkommensausfall', eur2(Math.round(pl.rate * pl.diff * 100) / 100))}
@@ -49,14 +56,21 @@
 
   function render() {
     const p1 = readParent('p1'), p2 = readParent('p2');
-    for (const id of ['p1', 'p2']) {
-      const el = $('#' + id);
-      $('.o-basis', el).textContent = Math.round(readParent(id).arbeitBasis * 100) + ' %';
-      $('.o-plus', el).textContent = Math.round(readParent(id).arbeitPlus * 100) + ' %';
-    }
     $('.n1').textContent = p1.name; $('.n2').textContent = p2.name;
     const opts = { geschwister: $('#geschwister').checked, mehrlinge: parseInt($('#mehrlinge').value, 10) || 0 };
     const e1 = E.elternteil(p1, opts), e2 = E.elternteil(p2, opts);
+    [['p1', p1, e1], ['p2', p2, e2]].forEach(([id, p, e]) => {
+      const el = $('#' + id);
+      $('.o-basis', el).textContent = `(${Math.round(e.basis.anteil * 100)} % der bisherigen Arbeit)`;
+      $('.o-plus', el).textContent = `(${Math.round(e.plus.anteil * 100)} %)`;
+      const warn = [];
+      if (!e.basisErlaubt) warn.push('Über 32 Std./Woche in Basis-Monaten: kein Elterngeld.');
+      if (!e.plusErlaubt) warn.push('Über 32 Std./Woche in Plus-/Bonus-Monaten: kein Elterngeld.');
+      else if (!e.bonusMoeglich) warn.push('Partnerschaftsbonus braucht 24–32 Std./Woche in den Plus-/Bonus-Monaten.');
+      const w = $('.warn', el);
+      w.textContent = warn.join(' ');
+      w.hidden = warn.length === 0;
+    });
 
     $('#monat').innerHTML = `<div class="calc">${monatBlock(p1, e1)}${monatBlock(p2, e2)}</div>`;
 
