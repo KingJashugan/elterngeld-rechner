@@ -200,3 +200,50 @@ test('Abgleich Zwei-Personen-Planung mit offiziellem Planer (Aufrunden auf volle
   near(r.t1.elterngeld, 3140, 0.001);
   near(r.elterngeld, 15940, 0.001);
 });
+
+// Reformentwurf (Juli 2026, ab 1.11.2027, noch kein Gesetz): 12 Monate, 3-3-6, 330–1.900 €.
+test('Reformentwurf: Beträge und Grenzen', () => {
+  const R = E.RECHT.reform;
+  near(E.basisMonat(2000, 0, R).betrag, 1300); // 65 % unverändert
+  near(E.basisMonat(3500, 0, R).betrag, 1900); // Höchstbetrag
+  near(E.basisMonat(2923, 0, R).betrag, 1900);
+  near(E.basisMonat(200, 0, R).betrag, 330); // Mindestbetrag
+  near(E.plusMonat(3500, 0, R).betrag, 950);
+  near(E.plusMonat(2000, 2000, R).betrag, 165);
+  near(E.basisMonat(3500, 0).betrag, 1800); // ohne Rechtslage: aktuelles Recht
+});
+
+test('Reformentwurf: Monatsgrenzen 3-3-6', () => {
+  const p = { netto: 2000, stundenAlt: 40, stundenPlus: 20, stundenBonus: 28 };
+  const o = { recht: 'reform' };
+  const e = E.elternteil(p, o);
+  const z = (basis, plus) => ({ basis, plus, bonus: 0 });
+  // Mutter 9 + Vater 3 = 12: gültig
+  let r = E.szenario({ p1: z(3, 0), p2: z(9, 0) }, e, e, p, p, 2);
+  assert.equal(r.fehler.length, 0);
+  // Mutter 12 + Vater 2 (heute gültig) ist nach dem Entwurf ungültig
+  r = E.szenario({ p1: z(2, 0), p2: z(12, 0) }, e, e, p, p, 2);
+  assert.ok(r.fehler.some((f) => f.includes('mehr als 9')));
+  // Vater allein 12 Monate: mehr als 9
+  r = E.szenario({ p1: z(12, 0), p2: z(0, 0) }, e, e, p, p, 2);
+  assert.ok(r.fehler.some((f) => f.includes('mehr als 9')));
+  // Insgesamt mehr als 12
+  r = E.szenario({ p1: z(5, 0), p2: z(8, 0) }, e, e, p, p, 2);
+  assert.ok(r.fehler.some((f) => f.includes('mehr als 12 Basismonate')));
+  // Plus: Mutter 2 Basis + 8 Plus (= 6), Vater 12 Plus (= 6): 12, gültig
+  r = E.szenario({ p1: z(0, 12), p2: z(0, 8) }, e, e, p, p, 2);
+  assert.equal(r.fehler.length, 0);
+  // Gleiche Planung nach heutigem Recht gültig mit anderen Grenzen
+  const ea = E.elternteil(p, { recht: 'aktuell' });
+  r = E.szenario({ p1: z(2, 0), p2: z(12, 0) }, ea, ea, p, p, 2);
+  assert.equal(r.fehler.length, 0);
+});
+
+test('Reformentwurf: Partnerschaftsbonus abschaltbar (unbestätigt)', () => {
+  const p = { netto: 2000, stundenAlt: 40, stundenPlus: 20, stundenBonus: 28 };
+  const plan = { p1: { basis: 0, plus: 6, bonus: 2 }, p2: { basis: 0, plus: 4, bonus: 2 } };
+  const mit = E.elternteil(p, { recht: 'reform' });
+  assert.equal(E.szenario(plan, mit, mit, p, p, 2).fehler.length, 0);
+  const ohne = E.elternteil(p, { recht: 'reform', bonusErlaubt: false });
+  assert.ok(E.szenario(plan, ohne, ohne, p, p, 2).fehler.some((f) => f.includes('entfallend')));
+});

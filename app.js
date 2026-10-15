@@ -21,20 +21,34 @@
   const MUTTERSCHUTZ_MONATE = 2;
   // Kontingent: 14 Basis-Monate, Plus zählt halb. Mutter: 2 Mutterschutz-Monate sind immer Basis.
   // Mutter 2 Basis + 12 Plus = 8, Vater 12 Plus = 6, zusammen 14.
-  const beispiele = () => [
+  // Reformentwurf: 12 Monate, je Elternteil max. 9 (3 reserviert + 6 frei); Mutter 2 Basis + 8 Plus = 6, Vater 12 Plus = 6.
+  const beispiele = (recht) => (recht === 'reform' ? [
+    scen('Mutter 6, Vater 6 Monate Basis', { basis: 6 }, { basis: 6 }),
+    scen('Mutter 9, Vater 3 Monate Basis', { basis: 3 }, { basis: 9 }),
+    scen('Vater 9 Basis, Mutter 3 (inkl. Mutterschutz)', { basis: 9 }, { basis: 3 }),
+    scen('Mutter 2 Basis + 8 Plus, Vater 12 Plus (je 20 Std.)', { plus: 12 }, { plus: 8 }),
+    scen('wie zuvor, dazu Bonus 4 Monate (je 28 Std.)', { plus: 12 }, { plus: 8 }, 4),
+  ] : [
     scen('Mutter 12, Vater 2 Monate Basis', { basis: 2 }, { basis: 12 }),
     scen('Mutter 7, Vater 7 Monate Basis', { basis: 7 }, { basis: 7 }),
     scen('Vater 12 Basis, Mutter nur Mutterschutz (2)', { basis: 12 }, { basis: 2 }),
     scen('Mutter 2 Basis + 12 Plus, Vater 12 Plus (je 20 Std.)', { plus: 12 }, { plus: 12 }),
     scen('wie zuvor, dazu Bonus 4 Monate (je 28 Std.)', { plus: 12 }, { plus: 12 }, 4),
-  ];
+  ]);
+  // true, wenn die Szenarien noch unverändert die Beispiele der Rechtslage sind
+  const sindBeispiele = (recht) => {
+    const key = (s) => [s.name, s.p1.basis, s.p1.plus, Math.max(s.p2.basis, ms()), s.p2.plus, s.bonus, s.p1.hPlus, s.p2.hPlus, s.p1.hBonus, s.p2.hBonus, s.p1.basisStart, s.p1.plusStart, s.p2.basisStart, s.p2.plusStart, s.bonusStart].join('|');
+    const ref = beispiele(recht).map(key);
+    return state.scenarios.length === ref.length && state.scenarios.every((s, i) => key(s) === ref[i]);
+  };
   const state = {
     parents: [
       { name: 'Ich (Vater)', netto: 3000, stundenAlt: 40 },
       { name: 'Partnerin (Mutter)', netto: 2200, stundenAlt: 40 },
     ],
+    recht: 'aktuell', bonusReform: true,
     mutterschutz: true, geschwister: false, mehrlinge: 0,
-    scenarios: beispiele(),
+    scenarios: beispiele('aktuell'),
   };
   const ms = () => (state.mutterschutz ? MUTTERSCHUTZ_MONATE : 0);
 
@@ -43,6 +57,8 @@
       const raw = JSON.parse(localStorage.getItem(KEY));
       if (!raw || !Array.isArray(raw.scenarios) || !Array.isArray(raw.parents) || raw.parents.length !== 2) return;
       state.parents = raw.parents.map((p) => ({ name: String(p.name || ''), netto: num(p.netto), stundenAlt: Math.max(1, num(p.stundenAlt)) }));
+      state.recht = raw.recht === 'reform' ? 'reform' : 'aktuell';
+      state.bonusReform = raw.bonusReform !== false;
       state.mutterschutz = raw.mutterschutz !== false;
       state.geschwister = !!raw.geschwister;
       state.mehrlinge = Math.min(5, num(raw.mehrlinge));
@@ -64,6 +80,8 @@
         stundenAlt: Math.max(1, num($('.stunden-alt', el).value)),
       };
     });
+    state.recht = $('input[name=recht]:checked').value === 'reform' ? 'reform' : 'aktuell';
+    state.bonusReform = $('#bonusReform').checked;
     state.mutterschutz = $('#mutterschutz').checked;
     state.geschwister = $('#geschwister').checked;
     state.mehrlinge = Math.min(5, Math.floor(num($('#mehrlinge').value)));
@@ -86,9 +104,21 @@
       const el = $('#' + id), p = state.parents[i];
       $('.name', el).value = p.name; $('.netto', el).value = p.netto; $('.stunden-alt', el).value = p.stundenAlt;
     });
+    $(`input[name=recht][value=${state.recht}]`).checked = true;
+    $('#bonusReform').checked = state.bonusReform;
     $('#mutterschutz').checked = state.mutterschutz;
     $('#geschwister').checked = state.geschwister;
     $('#mehrlinge').value = state.mehrlinge;
+  }
+
+  const RECHT_INFO = {
+    aktuell: 'Aktuelles Recht (Geburt bis Oktober 2027): bis 14 Monate Basis (12 + 2 Partnermonate), 300–1.800 €, Ersatzrate 65 %. Gegen den offiziellen Planer geprüft.',
+    reform: 'Reformentwurf (Referentenentwurf Juli 2026, geplant für Geburten ab 1.11.2027, noch kein Gesetz): 12 Monate Basis bzw. 24 Plus, davon 3 je Elternteil reserviert und 6 frei aufteilbar (max. 9 je Elternteil), 330–1.900 €, Ersatzrate 65 %. Annahmen ohne Beleg: Plus 165–950 €, Netto-Obergrenze 2.923 €, übrige Regeln wie heute (2 Monate Mindestbezug, Mutterschutz zählt als Basis). Der Entwurf kann sich noch ändern.',
+  };
+  function updateRecht() {
+    $('#rechtInfo').textContent = RECHT_INFO[state.recht];
+    $('#bonusReformWrap').hidden = state.recht !== 'reform';
+    $('#rechtBadge').textContent = state.recht === 'reform' ? '(Reformentwurf ab 1.11.2027)' : '(aktuelles Recht)';
   }
 
   function updateNames() {
@@ -191,7 +221,7 @@
 
   // ---------- Berechnung ----------
   function compute() {
-    const opts = { geschwister: state.geschwister, mehrlinge: state.mehrlinge };
+    const opts = { recht: state.recht, bonusErlaubt: state.recht !== 'reform' || state.bonusReform, geschwister: state.geschwister, mehrlinge: state.mehrlinge };
     const [a, b] = state.parents;
     return state.scenarios.map((s) => {
       const mk = (par, x) => ({ netto: par.netto, stundenAlt: par.stundenAlt, stundenPlus: x.hPlus, stundenBonus: x.hBonus, nettoPlus: x.nettoPlus, nettoBonus: x.nettoBonus });
@@ -245,6 +275,7 @@
 
   function update() {
     readDom();
+    updateRecht();
     updateNames();
     save();
     renderResults();
@@ -259,7 +290,7 @@
       const c = JSON.parse(JSON.stringify(state.scenarios[i]));
       state.scenarios.splice(i + 1, 0, scen((c.name || 'Szenario') + ' (Kopie)', c.p1, c.p2, c.bonus, c.bonusStart));
     } else if (a === 'del' && i >= 0) state.scenarios.splice(i, 1);
-    else if (a === 'reset') state.scenarios = beispiele();
+    else if (a === 'reset') state.scenarios = beispiele(state.recht);
     else return;
     save();
     renderCards();
@@ -271,6 +302,13 @@
     if (t.dataset && t.dataset.sk) {
       if (/Start$/.test(t.dataset.sk)) t.dataset.explicit = '1'; // Regler bewegt: fester Startmonat
       else { const n = $(`[data-k="${t.dataset.sk}"]`, t.closest('.scen')); if (n) n.value = t.value; } // Monate: Zahlenfeld mitführen
+    }
+    if (t.name === 'recht') { // Beispiele der alten Rechtslage gegen die der neuen austauschen (eigene Szenarien bleiben)
+      const alt = state.recht;
+      readDom();
+      if (state.recht !== alt && sindBeispiele(alt)) state.scenarios = beispiele(state.recht);
+      save(); updateRecht(); renderCards(); renderResults();
+      return;
     }
     update();
     if (t.id === 'mutterschutz') { renderCards(); renderResults(); } // Beschriftung/Mindestwert der Mutter-Basis-Monate
@@ -297,6 +335,7 @@
   load();
   writeParents();
   renderCards();
+  updateRecht();
   updateNames();
   renderResults();
 })();

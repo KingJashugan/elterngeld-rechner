@@ -1,20 +1,22 @@
 // Elterngeld-Rechenlogik (BEEG). Reine Funktionen, keine DOM-Zugriffe.
 // Alle Werte sind Schätzungen; maßgeblich ist der Bescheid der Elterngeldstelle.
 (function (root) {
+  // Rechtslagen. "aktuell": BEEG für Geburten bis Oktober 2027 (gegen den offiziellen Planer geprüft).
+  // "reform": Referentenentwurf vom Juli 2026, geplant für Geburten ab 1.11.2027 (noch kein Gesetz!).
+  // Belegt (Ratgeber/Presse): 12 statt 14 Monate, 3 Monate je Elternteil reserviert + 6 frei (3-3-6), 330–1.900 €, 65 %.
+  // ANNAHMEN (nicht belegt): Plus = halbe Beträge (165–950 €), Netto-Obergrenze 2.923 € (= 1.900 / 0,65),
+  // übrige Regeln (Staffel der Ersatzrate, 2 Monate Mindestbezug, Mutterschutz zählt als Basis, Fristen) unverändert.
+  const RECHT = {
+    aktuell: { name: 'aktuell', NETTO_CAP: 2770, BASIS_MIN: 300, BASIS_MAX: 1800, PLUS_MIN: 150, PLUS_MAX: 900, MONTHS_PER_PARENT: 12, MONTHS_TOTAL: 14 },
+    reform: { name: 'reform', NETTO_CAP: 2923, BASIS_MIN: 330, BASIS_MAX: 1900, PLUS_MIN: 165, PLUS_MAX: 950, MONTHS_PER_PARENT: 9, MONTHS_TOTAL: 12 },
+  };
   const C = {
-    NETTO_CAP: 2770, // max. berücksichtigtes Netto vor Geburt
-    BASIS_MIN: 300,
-    BASIS_MAX: 1800,
-    PLUS_MIN: 150,
-    PLUS_MAX: 900,
     GESCHWISTER_MIN_BASIS: 75,
     GESCHWISTER_MIN_PLUS: 37.5,
     MEHRLING_ZUSCHLAG: 300, // je weiteres Kind, Basis (Plus: Hälfte)
     BONUS_H_MIN: 24,
     BONUS_H_MAX: 32,
     BONUS_MONTHS: 4,
-    MONTHS_BASE: 12,
-    MONTHS_TOTAL: 14,
     BASIS_BIS_LM: 14, // Basiselterngeld nur bis zum 14. Lebensmonat
     PLUS_BIS_LM: 32, // ElterngeldPlus/Partnerschaftsbonus bis zum 32. Lebensmonat
   };
@@ -24,8 +26,9 @@
   const aufEuro = (x) => Math.ceil(round2(x) - 1e-9);
 
   // Ersatzrate abhängig vom Netto vor der Geburt (gedeckelt bei 2.770 €).
-  function ersatzrate(nettoVorher) {
-    const n = Math.min(Math.max(nettoVorher, 0), C.NETTO_CAP);
+  function ersatzrate(nettoVorher, R) {
+    R = R || RECHT.aktuell;
+    const n = Math.min(Math.max(nettoVorher, 0), R.NETTO_CAP);
     if (n < 1000) return Math.min(1, 0.67 + ((1000 - n) / 2) * 0.001);
     if (n <= 1200) return 0.67;
     if (n < 1240) return 0.67 - ((n - 1200) / 2) * 0.001;
@@ -33,32 +36,34 @@
   }
 
   // Basiselterngeld pro Monat (ohne Zuschläge) bei gegebenem Netto in der Elternzeit.
-  function basisMonat(nettoVorher, nettoNachher) {
-    const rate = ersatzrate(nettoVorher);
-    const bemessung = Math.min(Math.max(nettoVorher, 0), C.NETTO_CAP);
+  function basisMonat(nettoVorher, nettoNachher, R) {
+    R = R || RECHT.aktuell;
+    const rate = ersatzrate(nettoVorher, R);
+    const bemessung = Math.min(Math.max(nettoVorher, 0), R.NETTO_CAP);
     const diff = Math.max(0, bemessung - Math.max(0, nettoNachher));
     const roh = rate * diff;
-    const betrag = Math.min(C.BASIS_MAX, Math.max(C.BASIS_MIN, roh));
+    const betrag = Math.min(R.BASIS_MAX, Math.max(R.BASIS_MIN, roh));
     return {
       rate, bemessung, nettoNachher: Math.max(0, nettoNachher), diff,
       roh: round2(roh),
       betrag: aufEuro(betrag),
-      kappung: roh < C.BASIS_MIN ? 'min' : roh > C.BASIS_MAX ? 'max' : null,
+      kappung: roh < R.BASIS_MIN ? 'min' : roh > R.BASIS_MAX ? 'max' : null,
     };
   }
 
   // ElterngeldPlus pro Monat: höchstens die Hälfte des Basis-Betrags ohne Einkommen.
-  function plusMonat(nettoVorher, nettoNachher) {
-    const ohne = basisMonat(nettoVorher, 0).betrag;
-    const mit = basisMonat(nettoVorher, nettoNachher);
+  function plusMonat(nettoVorher, nettoNachher, R) {
+    R = R || RECHT.aktuell;
+    const ohne = basisMonat(nettoVorher, 0, R).betrag;
+    const mit = basisMonat(nettoVorher, nettoNachher, R);
     const halb = ohne / 2;
     const roh = Math.min(halb, mit.roh);
-    const betrag = Math.min(C.PLUS_MAX, Math.max(C.PLUS_MIN, roh));
+    const betrag = Math.min(R.PLUS_MAX, Math.max(R.PLUS_MIN, roh));
     return {
       rate: mit.rate, bemessung: mit.bemessung, nettoNachher: mit.nettoNachher,
       diff: mit.diff, roh: round2(roh), halbOhneEinkommen: round2(halb),
       betrag: aufEuro(betrag),
-      kappung: roh < C.PLUS_MIN ? 'min' : roh > C.PLUS_MAX ? 'max' : null,
+      kappung: roh < R.PLUS_MIN ? 'min' : roh > R.PLUS_MAX ? 'max' : null,
     };
   }
 
@@ -79,16 +84,20 @@
   // p: { netto, stundenAlt, stundenPlus, stundenBonus, nettoPlus?, nettoBonus? }
   // In Basis-Monaten wird nicht gearbeitet (Netto 0).
   // Netto in Plus-/Bonus-Monaten = Netto × (Stunden neu / Stunden alt), außer nettoPlus/nettoBonus ist angegeben.
+  // opts: { recht: 'aktuell'|'reform', geschwister, mehrlinge, bonusErlaubt (Standard true) }
   function elternteil(p, opts) {
+    const R = RECHT[opts && opts.recht] || RECHT.aktuell;
     const anteil = (h) => (p.stundenAlt > 0 ? Math.min(1, Math.max(0, h) / p.stundenAlt) : 0);
     const gegeben = (x) => typeof x === 'number' && Number.isFinite(x);
     const nPlus = gegeben(p.nettoPlus) ? p.nettoPlus : p.netto * anteil(p.stundenPlus);
     const nBonus = gegeben(p.nettoBonus) ? p.nettoBonus : p.netto * anteil(p.stundenBonus);
-    const b = basisMonat(p.netto, 0);
-    const pl = plusMonat(p.netto, nPlus);
-    const bo = plusMonat(p.netto, nBonus); // Bonusmonat wird wie ein Plusmonat berechnet
-    const plusOhne = plusMonat(p.netto, 0);
+    const b = basisMonat(p.netto, 0, R);
+    const pl = plusMonat(p.netto, nPlus, R);
+    const bo = plusMonat(p.netto, nBonus, R); // Bonusmonat wird wie ein Plusmonat berechnet
+    const plusOhne = plusMonat(p.netto, 0, R);
     return {
+      recht: R,
+      bonusErlaubt: !(opts && opts.bonusErlaubt === false),
       basis: { ...b, mitZuschlag: zuschlaege(b.betrag, 'basis', opts) },
       // Höchstbeträge ohne Arbeit (Referenz für den Verlust beim Elterngeld)
       ohneArbeit: {
@@ -118,11 +127,14 @@
       const bezug = pl.basis + pl.plus;
       if (bezug > 0 && bezug < 2) fehler.push(`${n}: mindestens 2 Monate Elterngeld (Basis oder Plus)`);
     });
-    if (equiv(plan.p1) > C.MONTHS_BASE) fehler.push('Elternteil 1: mehr als 12 Basismonate-Äquivalent');
-    if (equiv(plan.p2) > C.MONTHS_BASE) fehler.push('Elternteil 2: mehr als 12 Basismonate-Äquivalent');
-    if (equiv(plan.p1) + equiv(plan.p2) > C.MONTHS_TOTAL) fehler.push('Zusammen mehr als 14 Basismonate-Äquivalent' + (ms ? ' (inkl. Mutterschutz-Monate der Mutter; 1 Basis = 2 Plus)' : ' (1 Basis = 2 Plus)'));
+    const R = e1.recht || RECHT.aktuell;
+    const proElternteil = R.name === 'reform' ? ' (3 reserviert + 6 frei)' : '';
+    if (equiv(plan.p1) > R.MONTHS_PER_PARENT) fehler.push(`Elternteil 1: mehr als ${R.MONTHS_PER_PARENT} Basismonate-Äquivalent${proElternteil}`);
+    if (equiv(plan.p2) > R.MONTHS_PER_PARENT) fehler.push(`Elternteil 2: mehr als ${R.MONTHS_PER_PARENT} Basismonate-Äquivalent${proElternteil}`);
+    if (equiv(plan.p1) + equiv(plan.p2) > R.MONTHS_TOTAL) fehler.push(`Zusammen mehr als ${R.MONTHS_TOTAL} Basismonate-Äquivalent` + (ms ? ' (inkl. Mutterschutz-Monate der Mutter; 1 Basis = 2 Plus)' : ' (1 Basis = 2 Plus)'));
     const bonus = plan.p1.bonus + plan.p2.bonus;
     if (bonus > 0) {
+      if (e1.bonusErlaubt === false) fehler.push('Partnerschaftsbonus: im Reformentwurf als entfallend angenommen');
       if (plan.p1.bonus !== plan.p2.bonus) fehler.push('Partnerschaftsbonus: beide gleich viele Monate');
       if (plan.p1.bonus > C.BONUS_MONTHS) fehler.push('Partnerschaftsbonus: max. 4 Monate');
       if (plan.p1.bonus < 2) fehler.push('Partnerschaftsbonus: mindestens 2 Monate');
@@ -241,7 +253,7 @@
     };
   }
 
-  const api = { C, ersatzrate, basisMonat, plusMonat, zuschlaege, elternteil, szenario, zeitplan };
+  const api = { C, RECHT, ersatzrate, basisMonat, plusMonat, zuschlaege, elternteil, szenario, zeitplan };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Elterngeld = api;
 })(typeof self !== 'undefined' ? self : this);

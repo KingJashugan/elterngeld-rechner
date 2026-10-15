@@ -30,6 +30,14 @@
     </fieldset>
   </section>
 
+  <section class="card opts recht">
+    <strong>Rechtslage</strong>
+    <label class="inline"><input type="radio" name="recht" value="aktuell" checked> Aktuell (Geburt bis Oktober 2027)</label>
+    <label class="inline"><input type="radio" name="recht" value="reform"> Reformentwurf (Geburt ab 1.11.2027, noch nicht beschlossen)</label>
+    <label class="inline" id="bonusReformWrap" hidden><input type="checkbox" id="bonusReform" checked> Partnerschaftsbonus bleibt möglich (im Entwurf unbestätigt)</label>
+    <p class="note" id="rechtInfo"></p>
+  </section>
+
   <section class="card opts">
     <label class="inline"><input type="checkbox" id="mutterschutz" checked> Mutterschutz der Mutter: 2 Monate zählen als Basis-Monate (Mutterschaftsgeld wird angerechnet)</label>
     <label class="inline"><input type="checkbox" id="geschwister"> Geschwisterbonus (+10 %, mind. 75 €)</label>
@@ -48,14 +56,14 @@
   </div>
   <div id="scen" class="scenarios"></div>
 
-  <h2>Gegenüberstellung</h2>
+  <h2>Gegenüberstellung <small id="rechtBadge"></small></h2>
   <div class="scroll"><table id="vergleich"></table></div>
   <p class="hint">
     <strong>Verlust beim Elterngeld</strong> = Elterngeld, das ohne Arbeit für dieselben Monate gezahlt würde, minus tatsächliches Elterngeld.<br>
     <strong>Verlust ggü. Vollverdienst</strong> = Netto ohne Elternzeit in denselben Bezugsmonaten minus (Elterngeld + Teilzeit-Netto).
   </p>
 
-  <p class="disclaimer">Unverbindliche Schätzung nach BEEG. Rechtsstand: Oktober 2026, gilt für Geburten bis Oktober 2027 (14 Monate Basis, 300–1.800 €). Der Referentenentwurf vom Juli 2026 (u. a. 12 statt 14 Monate, 330–1.900 €, frühestens für Geburten ab November 2027) ist nicht berücksichtigt. Das Elterngeld ist Bundesrecht, in Rheinland-Pfalz gelten dieselben Beträge. Den Antrag stellt ihr bei der Elterngeldstelle der Kreis- oder Stadtverwaltung eures Wohnorts. Das Netto muss dem pauschalen „Elterngeld-Netto“ entsprechen, nicht der Gehaltsabrechnung. Es kann abweichen, etwa wegen Kirchensteuer (RLP 9 %). Maßgeblich ist der Bescheid deiner Elterngeldstelle. Das Teilzeit-Netto wird proportional zu den Stunden geschätzt; real sinkt das Netto weniger stark (Steuerprogression). Der offizielle Rechner liegt deshalb bei Teilzeit meist niedriger. Trage das Teilzeit-Netto aus deiner Prognose ein, wenn du es kennst. Nicht berücksichtigt: Einkommensgrenze (175.000 € zu versteuerndes Einkommen), Begrenzung gleichzeitigen Bezugs, Steuern auf das Teilzeitgehalt, Mutterschaftsgeld. Offizieller Rechner: <a href="https://familienportal.de/familienportal/meta/egr" rel="noopener">Familienportal</a>.</p>
+  <p class="disclaimer">Unverbindliche Schätzung nach BEEG. Rechtsstand: Oktober 2026. „Aktuell“ gilt für Geburten bis Oktober 2027 (14 Monate Basis, 300–1.800 €) und ist gegen den offiziellen Planer geprüft. Der Reformentwurf (Referentenentwurf Juli 2026: 12 statt 14 Monate, 3 Monate je Elternteil reserviert, 330–1.900 €, frühestens für Geburten ab 1.11.2027) ist kein Gesetz. Seine Zahlen beruhen auf Presse- und Ratgeberberichten, einzelne Regeln sind angenommen und können sich ändern. Das Elterngeld ist Bundesrecht, in Rheinland-Pfalz gelten dieselben Beträge. Den Antrag stellt ihr bei der Elterngeldstelle der Kreis- oder Stadtverwaltung eures Wohnorts. Das Netto muss dem pauschalen „Elterngeld-Netto“ entsprechen, nicht der Gehaltsabrechnung. Es kann abweichen, etwa wegen Kirchensteuer (RLP 9 %). Maßgeblich ist der Bescheid deiner Elterngeldstelle. Das Teilzeit-Netto wird proportional zu den Stunden geschätzt; real sinkt das Netto weniger stark (Steuerprogression). Der offizielle Rechner liegt deshalb bei Teilzeit meist niedriger. Trage das Teilzeit-Netto aus deiner Prognose ein, wenn du es kennst. Nicht berücksichtigt: Einkommensgrenze (175.000 € zu versteuerndes Einkommen), Begrenzung gleichzeitigen Bezugs, Steuern auf das Teilzeitgehalt, Mutterschaftsgeld. Offizieller Rechner: <a href="https://familienportal.de/familienportal/meta/egr" rel="noopener">Familienportal</a>.</p>
 </main>
 <script src="calc.js"></script>
 <script src="app.js"></script>
