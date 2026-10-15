@@ -13,18 +13,20 @@
   const sp = (o) => ({ basis: 0, plus: 0, hPlus: 20, hBonus: 28, nettoPlus: undefined, nettoBonus: undefined, ...o });
   let nextId = 1;
   const scen = (name, p1, p2, bonus) => ({ id: nextId++, name, p1: sp(p1), p2: sp(p2), bonus: bonus || 0 });
+  // Elternteil 1 = Vater, Elternteil 2 = Mutter (inkl. 2 Monate Mutterschutz in ihren Basis-Monaten)
+  const MUTTERSCHUTZ_MONATE = 2;
   const beispiele = () => [
-    scen('12 + 2 Monate Basis', { basis: 12 }, { basis: 2 }),
-    scen('7 + 7 Monate Basis', { basis: 7 }, { basis: 7 }),
-    scen('Plus 14 + 14, je 20 Std.', { plus: 14 }, { plus: 14 }),
-    scen('Plus 14 + 14 mit Bonus 4, Bonus je 28 Std.', { plus: 14 }, { plus: 14 }, 4),
+    scen('Mutter 12, Vater 2 Monate Basis', { basis: 2 }, { basis: 12 }),
+    scen('Mutter 7, Vater 7 Monate Basis', { basis: 7 }, { basis: 7 }),
+    scen('Mutter 2 Basis + 10 Plus, Vater 14 Plus (je 20 Std.)', { plus: 14 }, { plus: 10 }),
+    scen('wie zuvor, dazu Bonus 4 Monate (je 28 Std.)', { plus: 14 }, { plus: 10 }, 4),
   ];
   const state = {
     parents: [
-      { name: 'Ich', netto: 3000, stundenAlt: 40 },
-      { name: 'Partnerin', netto: 2200, stundenAlt: 40 },
+      { name: 'Ich (Vater)', netto: 3000, stundenAlt: 40 },
+      { name: 'Partnerin (Mutter)', netto: 2200, stundenAlt: 40 },
     ],
-    geschwister: false, mehrlinge: 0,
+    mutterschutz: true, geschwister: false, mehrlinge: 0,
     scenarios: beispiele(),
   };
 
@@ -33,6 +35,7 @@
       const raw = JSON.parse(localStorage.getItem(KEY));
       if (!raw || !Array.isArray(raw.scenarios) || !Array.isArray(raw.parents) || raw.parents.length !== 2) return;
       state.parents = raw.parents.map((p) => ({ name: String(p.name || ''), netto: num(p.netto), stundenAlt: Math.max(1, num(p.stundenAlt)) }));
+      state.mutterschutz = raw.mutterschutz !== false;
       state.geschwister = !!raw.geschwister;
       state.mehrlinge = Math.min(5, num(raw.mehrlinge));
       state.scenarios = raw.scenarios.map((s) => scen(String(s.name || ''), s.p1 || {}, s.p2 || {}, num(s.bonus)));
@@ -52,6 +55,7 @@
         stundenAlt: Math.max(1, num($('.stunden-alt', el).value)),
       };
     });
+    state.mutterschutz = $('#mutterschutz').checked;
     state.geschwister = $('#geschwister').checked;
     state.mehrlinge = Math.min(5, Math.floor(num($('#mehrlinge').value)));
     $$('.scen').forEach((el, i) => {
@@ -71,6 +75,7 @@
       const el = $('#' + id), p = state.parents[i];
       $('.name', el).value = p.name; $('.netto', el).value = p.netto; $('.stunden-alt', el).value = p.stundenAlt;
     });
+    $('#mutterschutz').checked = state.mutterschutz;
     $('#geschwister').checked = state.geschwister;
     $('#mehrlinge').value = state.mehrlinge;
   }
@@ -114,7 +119,7 @@
       const mk = (par, x) => ({ netto: par.netto, stundenAlt: par.stundenAlt, stundenPlus: x.hPlus, stundenBonus: x.hBonus, nettoPlus: x.nettoPlus, nettoBonus: x.nettoBonus });
       const e1 = E.elternteil(mk(a, s.p1), opts), e2 = E.elternteil(mk(b, s.p2), opts);
       const plan = { p1: { basis: s.p1.basis, plus: s.p1.plus, bonus: s.bonus }, p2: { basis: s.p2.basis, plus: s.p2.plus, bonus: s.bonus } };
-      const r = E.szenario(plan, e1, e2, a, b);
+      const r = E.szenario(plan, e1, e2, a, b, state.mutterschutz ? MUTTERSCHUTZ_MONATE : 0);
       const warn = [...r.fehler];
       if (r.monate === 0) warn.push('Keine Monate eingetragen.');
       return { s, r, warn, ok: warn.length === 0 };
@@ -136,7 +141,7 @@
     const [n1, n2] = state.parents.map((p) => esc(p.name));
     const cell = (x, fn, cls) => `<td class="${x.ok ? (cls ? cls(x) : '') : 'na'}">${x.ok ? fn(x) : '–'}</td>`;
     const rows = [
-      ['Monate', (x) => `${esc(n1)}: ${x.s.p1.basis} Basis, ${x.s.p1.plus} Plus<br>${esc(n2)}: ${x.s.p2.basis} Basis, ${x.s.p2.plus} Plus<br>Bonus: ${x.s.bonus} je Elternteil`, null],
+      ['Monate', (x) => `${esc(n1)}: ${x.s.p1.basis} Basis, ${x.s.p1.plus} Plus<br>${esc(n2)}: ${x.r.basis2} Basis${x.r.mutterschutz ? ` (davon ${x.r.mutterschutz} Mutterschutz)` : ''}, ${x.s.p2.plus} Plus<br>Bonus: ${x.s.bonus} je Elternteil`, null],
       ['Std./Woche', (x) => [[n1, x.s.p1], [n2, x.s.p2]].map(([n, p]) => {
         const t = [p.plus > 0 && `Plus ${p.hPlus}`, x.s.bonus > 0 && `Bonus ${p.hBonus}`].filter(Boolean).join(', ');
         return `${esc(n)}: ${t || 'keine Arbeit'}`;

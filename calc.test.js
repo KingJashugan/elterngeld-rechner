@@ -95,3 +95,28 @@ test('Szenario-Validierung und Summen', () => {
   const kein = E.szenario({ p1: { basis: 0, plus: 14, bonus: 4 }, p2: { basis: 0, plus: 14, bonus: 4 } }, eq, e, q, p);
   assert.ok(kein.fehler.some((f) => f.includes('24–32')));
 });
+
+test('Mutterschutz: 2 Monate zählen als Basis der Mutter, ohne zusätzliches Elterngeld', () => {
+  const p = { netto: 2000, stundenAlt: 40, stundenPlus: 20, stundenBonus: 28 };
+  const e = E.elternteil(p, {});
+  const z = (basis, plus, bonus) => ({ basis, plus, bonus: bonus || 0 });
+  // Mutter 12 Basis (davon 2 Mutterschutz) + Vater 2 Basis: nur 10 + 2 Monate Elterngeld
+  const r = E.szenario({ p1: z(2, 0), p2: z(12, 0) }, e, e, p, p, 2);
+  assert.equal(r.fehler.length, 0);
+  near(r.t2.elterngeld, 10 * 1300);
+  assert.equal(r.t2.monate, 10);
+  near(r.elterngeld, 12 * 1300);
+  near(r.verlustElterngeld, 0);
+  // Mutter ohne eigene Basis-Monate: 2 Mutterschutz-Monate werden trotzdem verbraucht
+  const nur = E.szenario({ p1: z(12, 0), p2: z(0, 0) }, e, e, p, p, 2);
+  assert.equal(nur.basis2, 2);
+  assert.equal(nur.fehler.length, 0); // 12 + 2 = 14
+  const zuViel = E.szenario({ p1: z(13, 0), p2: z(0, 0) }, e, e, p, p, 2);
+  assert.ok(zuViel.fehler.length > 0); // 13 + 2 > 14
+  // Mutter 2 Basis + 10 Plus (= 7) und Vater 14 Plus (= 7): genau 14
+  const ok = E.szenario({ p1: z(0, 14), p2: z(0, 10) }, e, e, p, p, 2);
+  assert.equal(ok.fehler.length, 0);
+  // ohne Mutterschutz-Option bleibt alles beim Alten
+  const alt = E.szenario({ p1: z(2, 0), p2: z(12, 0) }, e, e, p, p);
+  near(alt.t2.elterngeld, 12 * 1300);
+});

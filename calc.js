@@ -101,8 +101,13 @@
 
   // Szenario: { p1:{basis,plus,bonus}, p2:{basis,plus,bonus} } (Monate).
   // Gültig: je Elternteil Basis + Plus/2 <= 12; Summe <= 14; Bonus nur mit 24–32 h beider.
-  function szenario(plan, e1, e2, p1, p2) {
+  // mutterschutz: Monate, die bei Elternteil 2 (Mutter) automatisch als Basis-Monate zählen. Das
+  // Mutterschaftsgeld wird voll auf das Elterngeld angerechnet; diese Monate bringen daher kein
+  // zusätzliches Elterngeld und gelten nicht als Einkommensverlust (Mutterschaftsgeld + Zuschuss ≈ Netto).
+  function szenario(plan, e1, e2, p1, p2, mutterschutz) {
     const fehler = [];
+    const ms = mutterschutz || 0;
+    plan = { p1: plan.p1, p2: { ...plan.p2, basis: Math.max(plan.p2.basis, ms) } };
     const equiv = (x) => x.basis + x.plus / 2;
     if (equiv(plan.p1) > C.MONTHS_BASE) fehler.push('Elternteil 1: mehr als 12 Basismonate-Äquivalent');
     if (equiv(plan.p2) > C.MONTHS_BASE) fehler.push('Elternteil 2: mehr als 12 Basismonate-Äquivalent');
@@ -119,7 +124,8 @@
       if (pl.plus > 0 && !e.plusErlaubt) fehler.push(`${n}: in Plus-Monaten mehr als 32 Std./Woche`);
     });
 
-    const teil = (e, pl, p) => {
+    const teil = (e, pl, p, abzugBasis) => {
+      pl = { ...pl, basis: pl.basis - abzugBasis }; // Mutterschutz-Monate: kein zusätzliches Elterngeld
       const gBasis = pl.basis * e.basis.mitZuschlag;
       const gPlus = pl.plus * e.plus.mitZuschlag;
       const gBonus = pl.bonus * e.bonus.mitZuschlag;
@@ -136,10 +142,10 @@
         maximum: round2(maximum), verlustElterngeld: round2(maximum - elterngeld),
       };
     };
-    const t1 = teil(e1, plan.p1, p1);
-    const t2 = teil(e2, plan.p2, p2);
+    const t1 = teil(e1, plan.p1, p1, 0);
+    const t2 = teil(e2, plan.p2, p2, ms);
     return {
-      fehler, t1, t2,
+      fehler, t1, t2, mutterschutz: ms, basis2: plan.p2.basis,
       monate: t1.monate + t2.monate,
       elterngeld: round2(t1.elterngeld + t2.elterngeld),
       lohn: round2(t1.lohn + t2.lohn),

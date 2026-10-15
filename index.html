@@ -15,14 +15,14 @@
   <h2>Eure Daten</h2>
   <section class="cards">
     <fieldset class="card" id="p1">
-      <legend><input type="text" class="name" value="Ich" aria-label="Name Elternteil 1"></legend>
+      <legend><input type="text" class="name" value="Ich (Vater)" aria-label="Name Elternteil 1"></legend>
       <label>Netto pro Monat vor der Geburt (Ø 12 Monate), €
         <input type="number" class="netto" min="0" step="10" value="3000"></label>
       <label>Bisherige Wochenstunden
         <input type="number" class="stunden-alt" min="1" max="60" step="0.5" value="40"></label>
     </fieldset>
     <fieldset class="card" id="p2">
-      <legend><input type="text" class="name" value="Partnerin" aria-label="Name Elternteil 2"></legend>
+      <legend><input type="text" class="name" value="Partnerin (Mutter)" aria-label="Name Elternteil 2"></legend>
       <label>Netto pro Monat vor der Geburt (Ø 12 Monate), €
         <input type="number" class="netto" min="0" step="10" value="2200"></label>
       <label>Bisherige Wochenstunden
@@ -31,12 +31,13 @@
   </section>
 
   <section class="card opts">
+    <label class="inline"><input type="checkbox" id="mutterschutz" checked> Mutterschutz der Mutter: 2 Monate zählen als Basis-Monate (Mutterschaftsgeld wird angerechnet)</label>
     <label class="inline"><input type="checkbox" id="geschwister"> Geschwisterbonus (+10 %, mind. 75 €)</label>
     <label class="inline">Weitere Mehrlingskinder <input type="number" id="mehrlinge" min="0" max="5" value="0" style="width:4em"></label>
   </section>
 
   <h2>Szenarien</h2>
-  <p class="hint">Jedes Szenario hat eigene Monate und Wochenstunden. Basis-Monate laufen ohne Arbeit. Der Partnerschaftsbonus (2–4 Monate) gilt für beide gleich und braucht 24–32 Std./Woche bei beiden.</p>
+  <p class="hint">Jedes Szenario hat eigene Monate und Wochenstunden. Basis-Monate laufen ohne Arbeit. Bei der Mutter (Partnerin) zählen die 2 Monate Mutterschutz immer als Basis-Monate und sind in ihren Basis-Monaten enthalten. Dafür gibt es kein zusätzliches Elterngeld, sie zählen aber zum Kontingent von 14 Monaten. Der Partnerschaftsbonus (2–4 Monate) gilt für beide gleich und braucht 24–32 Std./Woche bei beiden.</p>
   <div class="toolbar">
     <button type="button" data-act="add">+ Neues Szenario</button>
     <button type="button" data-act="reset" class="secondary">Beispiele wiederherstellen</button>
