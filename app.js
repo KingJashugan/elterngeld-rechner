@@ -8,11 +8,15 @@
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const num = (v) => Math.max(0, parseFloat(v) || 0);
   const opt = (v) => { const x = parseFloat(v); return Number.isFinite(x) ? Math.max(0, x) : undefined; };
+  const start = (v) => { const x = Math.floor(parseFloat(v)); return Number.isFinite(x) && x >= 1 ? x : undefined; };
+  const getPath = (o, key) => key.split('.').reduce((a, k) => a[k], o);
+  const setPath = (o, key, v) => { const ks = key.split('.'); const last = ks.pop(); ks.reduce((a, k) => a[k], o)[last] = v; };
 
   // ---------- Zustand ----------
-  const sp = (o) => ({ basis: 0, plus: 0, hPlus: 20, hBonus: 28, nettoPlus: undefined, nettoBonus: undefined, ...o });
+  // basisStart/plusStart/bonusStart: Lebensmonat; undefined = automatisch hinter dem vorigen Block
+  const sp = (o) => ({ basis: 0, plus: 0, hPlus: 20, hBonus: 28, nettoPlus: undefined, nettoBonus: undefined, basisStart: undefined, plusStart: undefined, ...o });
   let nextId = 1;
-  const scen = (name, p1, p2, bonus) => ({ id: nextId++, name, p1: sp(p1), p2: sp(p2), bonus: bonus || 0 });
+  const scen = (name, p1, p2, bonus, bonusStart) => ({ id: nextId++, name, p1: sp(p1), p2: sp(p2), bonus: bonus || 0, bonusStart });
   // Elternteil 1 = Vater, Elternteil 2 = Mutter (inkl. 2 Monate Mutterschutz in ihren Basis-Monaten)
   const MUTTERSCHUTZ_MONATE = 2;
   // Kontingent: 14 Basis-Monate, Plus zählt halb. Mutter: 2 Mutterschutz-Monate sind immer Basis.
@@ -32,6 +36,7 @@
     mutterschutz: true, geschwister: false, mehrlinge: 0,
     scenarios: beispiele(),
   };
+  const ms = () => (state.mutterschutz ? MUTTERSCHUTZ_MONATE : 0);
 
   function load() {
     try {
@@ -41,7 +46,8 @@
       state.mutterschutz = raw.mutterschutz !== false;
       state.geschwister = !!raw.geschwister;
       state.mehrlinge = Math.min(5, num(raw.mehrlinge));
-      state.scenarios = raw.scenarios.map((s) => scen(String(s.name || ''), s.p1 || {}, s.p2 || {}, num(s.bonus)));
+      const clean = (p) => ({ ...(p || {}), basisStart: start(p && p.basisStart), plusStart: start(p && p.plusStart) });
+      state.scenarios = raw.scenarios.map((s) => scen(String(s.name || ''), clean(s.p1), clean(s.p2), num(s.bonus), start(s.bonusStart)));
     } catch (e) { /* ohne Speicher weiterarbeiten */ }
   }
   function save() {
@@ -68,8 +74,10 @@
       s.bonus = Math.floor(num($('[data-k=bonus]', el).value));
       ['p1', 'p2'].forEach((p) => {
         const g = (k) => $(`[data-k="${p}.${k}"]`, el).value;
-        s[p] = { basis: Math.floor(num(g('basis'))), plus: Math.floor(num(g('plus'))), hPlus: num(g('hPlus')), hBonus: num(g('hBonus')), nettoPlus: opt(g('nettoPlus')), nettoBonus: opt(g('nettoBonus')) };
+        s[p] = { ...s[p], basis: Math.floor(num(g('basis'))), plus: Math.floor(num(g('plus'))), hPlus: num(g('hPlus')), hBonus: num(g('hBonus')), nettoPlus: opt(g('nettoPlus')), nettoBonus: opt(g('nettoBonus')) };
       });
+      // Startmonate: nur gesetzt, wenn der Regler bewegt wurde (sonst automatisch)
+      $$('input[data-sk$="Start"]', el).forEach((sl) => setPath(s, sl.dataset.sk, sl.dataset.explicit === '1' ? start(sl.value) : undefined));
     });
   }
 
@@ -83,11 +91,65 @@
     $('#mehrlinge').value = state.mehrlinge;
   }
 
+  function updateNames() {
+    $$('.pn').forEach((el) => { el.textContent = state.parents[+el.dataset.who].name; });
+  }
+
+  // ---------- Zeitleiste ----------
+  const LBL = { M: 'Mutterschutz', B: 'Basis', P: 'Plus', K: 'Bonus', X: 'Überschneidung' };
+  function barsHtml(zp, compact) {
+    const N = zp.laenge;
+    const cols = `grid-template-columns:repeat(${N},1fr)`;
+    const ruler = compact ? '' : `<div class="tl-row"><span class="tl-name"></span><div class="tl-cells tl-ruler" style="${cols}">${Array.from({ length: N }, (_, i) => `<i>${i === 0 || (i + 1) % 6 === 0 ? i + 1 : ''}</i>`).join('')}</div></div>`;
+    const row = (who, idx) => {
+      const name = state.parents[idx].name;
+      const cells = Array.from({ length: N }, (_, i) => {
+        const m = i + 1, t = zp.rows[who][m];
+        return `<i class="c${t ? ' c-' + t : ''}${m === E.C.BASIS_BIS_LM ? ' lm14' : ''}" title="${m}. Lebensmonat${t ? ': ' + LBL[t] : ''}">${compact ? '' : t === 'X' ? '!' : t || ''}</i>`;
+      }).join('');
+      return `<div class="tl-row"><span class="tl-name" title="${esc(name)}">${esc(compact ? name.charAt(0).toUpperCase() : name)}</span><div class="tl-cells" style="${cols}">${cells}</div></div>`;
+    };
+    return `<div class="tl-grid${compact ? ' tl-compact' : ''}">${ruler}${row('p1', 0)}${row('p2', 1)}</div>`;
+  }
+
+  const effStart = (zp, key) => ({ 'p1.basisStart': zp.starts.p1.basis, 'p1.plusStart': zp.starts.p1.plus, 'p2.basisStart': zp.starts.p2.basis, 'p2.plusStart': zp.starts.p2.plus, bonusStart: zp.starts.bonus }[key]);
+
+  function sliderHtml(key, label, max) {
+    const isStart = /Start$/.test(key);
+    return `<div class="sl" data-sl="${key}">
+      <label><span>${label}</span> <output></output>
+        <input type="range" data-sk="${key}" data-explicit="0" min="${isStart ? 1 : 0}" max="${isStart ? 32 : max}" step="1" value="0"></label>
+      ${isStart ? `<button type="button" class="secondary auto" data-act="auto" data-sk="${key}" title="Wieder automatisch anordnen" hidden>auto</button>` : ''}
+    </div>`;
+  }
+
+  function syncTimeline(card, s, zp) {
+    $('.tl-bars', card).innerHTML = barsHtml(zp, false);
+    $$('input[data-sk]', card).forEach((sl) => {
+      const key = sl.dataset.sk, isStart = /Start$/.test(key), row = sl.closest('.sl');
+      let v, explicit = false;
+      if (isStart) {
+        explicit = getPath(s, key) != null;
+        sl.dataset.explicit = explicit ? '1' : '0';
+        v = explicit ? getPath(s, key) : effStart(zp, key);
+        const countKey = key.replace('Start', '');
+        const count = key === 'p2.basisStart' ? Math.max(s.p2.basis, ms()) - ms() : num(getPath(s, countKey));
+        row.hidden = count <= 0;
+        $('.auto', row).hidden = !explicit;
+      } else {
+        sl.min = key === 'p2.basis' ? ms() : 0;
+        v = Math.max(num(getPath(s, key)), key === 'p2.basis' ? ms() : 0);
+      }
+      if (document.activeElement !== sl) sl.value = v;
+      $('output', row).textContent = isStart ? `Monat ${v}${explicit ? '' : ' (auto)'}` : v;
+    });
+  }
+
   // ---------- Szenario-Karten ----------
   function cardHtml(s) {
     const row = (p, i) => `
       <div class="prow">
-        <strong class="pn">${esc(state.parents[i].name)}</strong>
+        <strong class="pn" data-who="${i}">${esc(state.parents[i].name)}</strong>
         <label>${p === 'p2' && state.mutterschutz ? 'Basis-Monate (inkl. 2 Mutterschutz, mind. 2)' : 'Basis-Monate'}<input type="number" min="${p === 'p2' && state.mutterschutz ? MUTTERSCHUTZ_MONATE : 0}" max="14" step="1" data-k="${p}.basis" value="${p === 'p2' && state.mutterschutz ? Math.max(s[p].basis, MUTTERSCHUTZ_MONATE) : s[p].basis}"></label>
         <label>Plus-Monate<input type="number" min="0" max="28" step="1" data-k="${p}.plus" value="${s[p].plus}"></label>
         <label>Std./Woche Plus<input type="number" min="0" max="60" step="0.5" data-k="${p}.hPlus" value="${s[p].hPlus}"></label>
@@ -98,6 +160,9 @@
           <label>Netto Bonus, €<input type="number" min="0" step="10" placeholder="Schätzung" data-k="${p}.nettoBonus" value="${s[p].nettoBonus ?? ''}"></label>
         </details>
       </div>`;
+    const grp = (p, i) => `<div class="slgrp"><strong class="pn" data-who="${i}">${esc(state.parents[i].name)}</strong>
+        ${sliderHtml(p + '.basis', 'Basis-Monate', 14)}${sliderHtml(p + '.basisStart', 'Beginn Basis')}
+        ${sliderHtml(p + '.plus', 'Plus-Monate', 28)}${sliderHtml(p + '.plusStart', 'Beginn Plus')}</div>`;
     return `<div class="card scen" data-id="${s.id}">
       <div class="shead">
         <input type="text" class="sname" value="${esc(s.name)}" placeholder="Name des Szenarios" aria-label="Name des Szenarios">
@@ -106,7 +171,17 @@
       </div>
       ${row('p1', 0)}${row('p2', 1)}
       <label class="bonus">Bonus-Monate (beide, 0 oder 2–4)<input type="number" min="0" max="4" step="1" data-k="bonus" value="${s.bonus}"></label>
+      <div class="tl">
+        <div class="tl-title">Zeitplan (Lebensmonate)</div>
+        <div class="tl-bars"></div>
+        <details class="tl-ctl" open>
+          <summary>Zeitplan mit Reglern anpassen</summary>
+          ${grp('p1', 0)}${grp('p2', 1)}
+          <div class="slgrp"><strong>Partnerschaftsbonus</strong>${sliderHtml('bonus', 'Bonus-Monate (beide)', 4)}${sliderHtml('bonusStart', 'Beginn Bonus')}</div>
+        </details>
+      </div>
       <p class="warn" hidden></p>
+      <p class="note" hidden></p>
     </div>`;
   }
 
@@ -122,19 +197,23 @@
       const mk = (par, x) => ({ netto: par.netto, stundenAlt: par.stundenAlt, stundenPlus: x.hPlus, stundenBonus: x.hBonus, nettoPlus: x.nettoPlus, nettoBonus: x.nettoBonus });
       const e1 = E.elternteil(mk(a, s.p1), opts), e2 = E.elternteil(mk(b, s.p2), opts);
       const plan = { p1: { basis: s.p1.basis, plus: s.p1.plus, bonus: s.bonus }, p2: { basis: s.p2.basis, plus: s.p2.plus, bonus: s.bonus } };
-      const r = E.szenario(plan, e1, e2, a, b, state.mutterschutz ? MUTTERSCHUTZ_MONATE : 0);
-      const warn = [...r.fehler];
+      const r = E.szenario(plan, e1, e2, a, b, ms());
+      const zp = E.zeitplan(s, ms());
+      const warn = [...r.fehler, ...zp.fehler];
       if (r.monate === 0) warn.push('Keine Monate eingetragen.');
-      return { s, r, warn, ok: warn.length === 0 };
+      return { s, r, zp, warn, ok: warn.length === 0 };
     });
   }
 
   function renderResults() {
     const res = compute();
     $$('.scen').forEach((el, i) => {
-      const w = $('.warn', el), x = res[i];
+      const w = $('.warn', el), n = $('.note', el), x = res[i];
       w.textContent = x.warn.join(' · ');
       w.hidden = x.ok;
+      n.textContent = x.zp.hinweise.join(' ');
+      n.hidden = x.zp.hinweise.length === 0;
+      syncTimeline(el, x.s, x.zp);
     });
 
     const valid = res.filter((x) => x.ok);
@@ -158,13 +237,15 @@
       ['Verlust ggü. Vollverdienst', (x) => `<strong class="neg">${eur(x.r.verlust)}</strong><br><small>${pct(x.r.verlust, x.r.referenz)} vom Vollverdienst</small>`, (x) => (x.r.verlust === bestVerlust ? 'best' : '')],
     ];
     const head = `<tr><th></th>${res.map((x) => `<th>${esc(x.s.name || 'Szenario')}${x.ok ? '' : '<br><small class="neg">ungültig</small>'}</th>`).join('')}</tr>`;
-    const body = rows.map(([label, fn, cls]) => `<tr><th scope="row">${label}</th>${res.map((x) => cell(x, fn, cls)).join('')}</tr>`).join('');
-    $('#vergleich').innerHTML = res.length ? head + body : '<tr><td>Noch kein Szenario. Mit „+ Neues Szenario“ anlegen.</td></tr>';
+    const body = rows.map(([label, fn, cls]) => `<tr><th scope="row">${label}</th>${res.map((x) => cell(x, fn, cls)).join('')}</tr>`);
+    // Zeitplan zeigt auch ungültige Szenarien (dort sieht man, was nicht passt)
+    body.splice(2, 0, `<tr><th scope="row">Zeitplan</th>${res.map((x) => `<td>${barsHtml(x.zp, true)}<small>bis Lebensmonat ${x.zp.ende}</small></td>`).join('')}</tr>`);
+    $('#vergleich').innerHTML = res.length ? head + body.join('') : '<tr><td>Noch kein Szenario. Mit „+ Neues Szenario“ anlegen.</td></tr>';
   }
 
   function update() {
     readDom();
-    $$('.pn').forEach((el, i) => { el.textContent = state.parents[i % 2].name; });
+    updateNames();
     save();
     renderResults();
   }
@@ -176,7 +257,7 @@
     if (a === 'add') state.scenarios.push(scen('Szenario ' + (state.scenarios.length + 1), { basis: 2 }, { basis: 12 }));
     else if (a === 'dup' && i >= 0) {
       const c = JSON.parse(JSON.stringify(state.scenarios[i]));
-      state.scenarios.splice(i + 1, 0, scen((c.name || 'Szenario') + ' (Kopie)', c.p1, c.p2, c.bonus));
+      state.scenarios.splice(i + 1, 0, scen((c.name || 'Szenario') + ' (Kopie)', c.p1, c.p2, c.bonus, c.bonusStart));
     } else if (a === 'del' && i >= 0) state.scenarios.splice(i, 1);
     else if (a === 'reset') state.scenarios = beispiele();
     else return;
@@ -186,8 +267,13 @@
   }
 
   document.addEventListener('input', (ev) => {
+    const t = ev.target;
+    if (t.dataset && t.dataset.sk) {
+      if (/Start$/.test(t.dataset.sk)) t.dataset.explicit = '1'; // Regler bewegt: fester Startmonat
+      else { const n = $(`[data-k="${t.dataset.sk}"]`, t.closest('.scen')); if (n) n.value = t.value; } // Monate: Zahlenfeld mitführen
+    }
     update();
-    if (ev.target.id === 'mutterschutz') { renderCards(); renderResults(); } // Beschriftung/Mindestwert der Mutter-Basis-Monate
+    if (t.id === 'mutterschutz') { renderCards(); renderResults(); } // Beschriftung/Mindestwert der Mutter-Basis-Monate
   });
   // Beim Verlassen des Felds: Basis-Monate der Mutter auf mindestens 2 anheben (nicht während des Tippens)
   document.addEventListener('change', (ev) => {
@@ -199,12 +285,18 @@
   });
   document.addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-act]');
-    if (b) act(b.dataset.act, b.closest('.scen')?.dataset.id);
+    if (!b) return;
+    if (b.dataset.act === 'auto') { // Startmonat wieder automatisch
+      const sl = $(`input[data-sk="${b.dataset.sk}"]`, b.closest('.scen'));
+      if (sl) { sl.dataset.explicit = '0'; update(); }
+      return;
+    }
+    act(b.dataset.act, b.closest('.scen')?.dataset.id);
   });
 
   load();
   writeParents();
   renderCards();
-  $$('.pn').forEach((el, i) => { el.textContent = state.parents[i % 2].name; });
+  updateNames();
   renderResults();
 })();

@@ -15,6 +15,8 @@
     BONUS_MONTHS: 4,
     MONTHS_BASE: 12,
     MONTHS_TOTAL: 14,
+    BASIS_BIS_LM: 14, // Basiselterngeld nur bis zum 14. Lebensmonat
+    PLUS_BIS_LM: 32, // ElterngeldPlus/Partnerschaftsbonus bis zum 32. Lebensmonat
   };
 
   const round2 = (x) => Math.round(x * 100) / 100;
@@ -157,7 +159,74 @@
     };
   }
 
-  const api = { C, ersatzrate, basisMonat, plusMonat, zuschlaege, elternteil, szenario };
+  // Zeitliche Abfolge in Lebensmonaten (1-basiert).
+  // sc: { p1:{basis,plus,basisStart?,plusStart?}, p2:{…}, bonus, bonusStart? }; Elternteil 2 = Mutter.
+  // Ohne Startwert werden die Blöcke nacheinander gelegt: Mutter-Mutterschutz in Monat 1..ms, dann ihre
+  // restlichen Basis-Monate, danach Vater-Basis; Plus je nach Basis-Ende (Vater ohne Basis: parallel zur Mutter);
+  // Bonus am Ende (beide gleichzeitig).
+  // Rückgabe: rows (Typ je Monat: M Mutterschutz, B Basis, P Plus, K Bonus, X Überschneidung),
+  // laenge, starts (wirksame Startmonate), fehler (ungültig), hinweise (nur Warnung).
+  function zeitplan(sc, ms) {
+    ms = ms || 0;
+    const n = (x) => Math.max(0, Math.floor(Number(x) || 0));
+    const st = (x, d) => (Number.isFinite(x) && x >= 1 ? Math.floor(x) : d);
+    const a = { basis: n(sc.p1.basis), plus: n(sc.p1.plus) };
+    const m = { basis: Math.max(n(sc.p2.basis), ms), plus: n(sc.p2.plus) };
+    const bonus = n(sc.bonus);
+    const mRest = Math.max(0, m.basis - ms);
+
+    const mStartB = st(sc.p2.basisStart, ms + 1);
+    const mEndB = mRest > 0 ? mStartB + mRest - 1 : ms;
+    const aStartB = st(sc.p1.basisStart, mEndB + 1);
+    const aEndB = a.basis > 0 ? aStartB + a.basis - 1 : 0;
+    const mStartP = st(sc.p2.plusStart, mEndB + 1);
+    const aStartP = st(sc.p1.plusStart, a.basis > 0 ? aEndB + 1 : mStartP);
+    const mEndP = m.plus > 0 ? mStartP + m.plus - 1 : 0;
+    const aEndP = a.plus > 0 ? aStartP + a.plus - 1 : 0;
+    const bonusStart = st(sc.bonusStart, Math.max(mEndB, aEndB, mEndP, aEndP) + 1);
+
+    const fehler = [], hinweise = [];
+    const rows = { p1: [], p2: [] };
+    const konflikt = { p1: false, p2: false };
+    const put = (who, from, count, typ) => {
+      for (let i = 0; i < count; i++) {
+        const mo = from + i;
+        if (rows[who][mo]) { rows[who][mo] = 'X'; konflikt[who] = true; } else rows[who][mo] = typ;
+      }
+    };
+    put('p2', 1, ms, 'M');
+    put('p2', mStartB, mRest, 'B');
+    put('p1', aStartB, a.basis, 'B');
+    put('p2', mStartP, m.plus, 'P');
+    put('p1', aStartP, a.plus, 'P');
+    put('p1', bonusStart, bonus, 'K');
+    put('p2', bonusStart, bonus, 'K');
+
+    if (konflikt.p1) fehler.push('Elternteil 1: Zeiträume überschneiden sich');
+    if (konflikt.p2) fehler.push('Elternteil 2: Zeiträume überschneiden sich');
+    let spaetB = false, spaetP = false, last = 0, parallel = 0;
+    ['p1', 'p2'].forEach((w) => rows[w].forEach((t, mo) => {
+      if (!t) return;
+      last = Math.max(last, mo);
+      if ((t === 'B' || t === 'M') && mo > C.BASIS_BIS_LM) spaetB = true;
+      if ((t === 'P' || t === 'K') && mo > C.PLUS_BIS_LM) spaetP = true;
+    }));
+    for (let mo = 1; mo <= 12; mo++) {
+      const basisT = (t) => t === 'B' || t === 'M';
+      if (basisT(rows.p1[mo]) && basisT(rows.p2[mo])) parallel++;
+    }
+    if (spaetB) fehler.push(`Basiselterngeld nur bis zum ${C.BASIS_BIS_LM}. Lebensmonat`);
+    if (spaetP) fehler.push(`Plus/Bonus nur bis zum ${C.PLUS_BIS_LM}. Lebensmonat`);
+    if (parallel > 1) hinweise.push(`Basiselterngeld bei beiden gleichzeitig in ${parallel} Monaten – im 1.–12. Lebensmonat ist das nur für 1 Monat vorgesehen (Ausnahmen möglich).`);
+
+    return {
+      rows, laenge: Math.max(C.BASIS_BIS_LM, last), ende: last,
+      starts: { p1: { basis: aStartB, plus: aStartP }, p2: { basis: mStartB, plus: mStartP }, bonus: bonusStart },
+      fehler, hinweise,
+    };
+  }
+
+  const api = { C, ersatzrate, basisMonat, plusMonat, zuschlaege, elternteil, szenario, zeitplan };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Elterngeld = api;
 })(typeof self !== 'undefined' ? self : this);

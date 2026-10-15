@@ -120,3 +120,41 @@ test('Mutterschutz: 2 Monate zählen als Basis der Mutter, ohne zusätzliches El
   const alt = E.szenario({ p1: z(2, 0), p2: z(12, 0) }, e, e, p, p);
   near(alt.t2.elterngeld, 12 * 1300);
 });
+
+test('Zeitplan: automatische Anordnung', () => {
+  const sc = (p1, p2, bonus, extra) => ({ p1, p2, bonus: bonus || 0, ...extra });
+  const typ = (zp, who, from, to) => Array.from({ length: to - from + 1 }, (_, i) => zp.rows[who][from + i] || '.').join('');
+  // Mutter 12 (2 Mutterschutz), Vater 2: Mutter 1-12, Vater 13-14
+  let zp = E.zeitplan(sc({ basis: 2, plus: 0 }, { basis: 12, plus: 0 }), 2);
+  assert.equal(typ(zp, 'p2', 1, 14), 'MMBBBBBBBBBB..');
+  assert.equal(typ(zp, 'p1', 1, 14), '............BB');
+  assert.equal(zp.fehler.length, 0);
+  assert.equal(zp.laenge, 14);
+  // Mutter 2 + 12 Plus, Vater 12 Plus: Plus parallel ab Monat 3; Bonus danach
+  zp = E.zeitplan(sc({ basis: 0, plus: 12 }, { basis: 0, plus: 12 }, 4), 2);
+  assert.equal(typ(zp, 'p2', 1, 18), 'MMPPPPPPPPPPPPKKKK'.slice(0, 18));
+  assert.equal(typ(zp, 'p1', 3, 18), 'PPPPPPPPPPPPKKKK');
+  assert.equal(zp.starts.bonus, 15);
+  assert.equal(zp.laenge, 18);
+  assert.equal(zp.fehler.length, 0);
+});
+
+test('Zeitplan: Regler-Startwerte, Überschneidung, Fristen, Parallelbezug', () => {
+  const base = { p1: { basis: 2, plus: 0 }, p2: { basis: 12, plus: 0 }, bonus: 0 };
+  // Vater-Basis ab Monat 20: nach dem 14. Lebensmonat nicht mehr möglich
+  let zp = E.zeitplan({ ...base, p1: { basis: 2, plus: 0, basisStart: 20 } }, 2);
+  assert.ok(zp.fehler.some((f) => f.includes('14. Lebensmonat')));
+  // Plus nach dem 32. Lebensmonat
+  zp = E.zeitplan({ p1: { basis: 0, plus: 4, plusStart: 31 }, p2: { basis: 0, plus: 0 }, bonus: 0 }, 2);
+  assert.ok(zp.fehler.some((f) => f.includes('32. Lebensmonat')));
+  // Überschneidung: Plus der Mutter über ihrem Basis-Block
+  zp = E.zeitplan({ p1: { basis: 0, plus: 0 }, p2: { basis: 6, plus: 4, plusStart: 5 }, bonus: 0 }, 2);
+  assert.ok(zp.fehler.some((f) => f.includes('überschneiden')));
+  // Vater-Basis parallel zur Mutter in 3 Monaten: nur Hinweis, kein Fehler
+  zp = E.zeitplan({ p1: { basis: 3, plus: 0, basisStart: 3 }, p2: { basis: 6, plus: 0 }, bonus: 0 }, 2);
+  assert.equal(zp.fehler.length, 0);
+  assert.ok(zp.hinweise.length > 0);
+  // 1 Monat parallel (Mutterschutz-Monat 2 + Vater-Basis ab Monat 2) ist erlaubt
+  zp = E.zeitplan({ p1: { basis: 1, plus: 0, basisStart: 2 }, p2: { basis: 2, plus: 0 }, bonus: 0 }, 2);
+  assert.equal(zp.hinweise.length, 0);
+});
