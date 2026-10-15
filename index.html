@@ -4,14 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Elterngeld-Rechner</title>
-  <meta name="description" content="Vergleicht Basiselterngeld, ElterngeldPlus und Partnerschaftsbonus für zwei Elternteile. Berechnung nur im Browser.">
+  <meta name="description" content="Legt eigene Elterngeld-Szenarien für zwei Elternteile an und stellt sie gegenüber. Berechnung nur im Browser.">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <main>
   <h1>Elterngeld-Rechner</h1>
-  <p class="lead">Vergleicht Basiselterngeld, ElterngeldPlus und Partnerschaftsbonus für euch beide. Alles wird nur in deinem Browser berechnet, nichts wird gespeichert oder gesendet.</p>
+  <p class="lead">Legt eigene Szenarien an (wie viele Monate Basis, Plus und Bonus, bei wie vielen Wochenstunden) und stellt sie gegenüber. Alles wird nur in deinem Browser berechnet. Eingaben bleiben lokal in diesem Browser gespeichert und werden nie gesendet.</p>
 
+  <h2>Eure Daten</h2>
   <section class="cards">
     <fieldset class="card" id="p1">
       <legend><input type="text" class="name" value="Ich" aria-label="Name Elternteil 1"></legend>
@@ -19,18 +20,6 @@
         <input type="number" class="netto" min="0" step="10" value="3000"></label>
       <label>Bisherige Wochenstunden
         <input type="number" class="stunden-alt" min="1" max="60" step="0.5" value="40"></label>
-      <label>Wochenstunden in Plus-Monaten <output class="o-plus"></output>
-        <input type="number" class="stunden-plus" min="0" max="60" step="0.5" value="20"></label>
-      <label>Wochenstunden in Bonus-Monaten (24–32) <output class="o-bonus"></output>
-        <input type="number" class="stunden-bonus" min="0" max="60" step="0.5" value="28"></label>
-      <details>
-        <summary>Teilzeit-Netto selbst eintragen (optional)</summary>
-        <label>Netto/Monat in Plus-Monaten, €
-          <input type="number" class="netto-plus" min="0" step="10" placeholder="Schätzung"></label>
-        <label>Netto/Monat in Bonus-Monaten, €
-          <input type="number" class="netto-bonus" min="0" step="10" placeholder="Schätzung"></label>
-      </details>
-      <p class="warn" hidden></p>
     </fieldset>
     <fieldset class="card" id="p2">
       <legend><input type="text" class="name" value="Partnerin" aria-label="Name Elternteil 2"></legend>
@@ -38,18 +27,6 @@
         <input type="number" class="netto" min="0" step="10" value="2200"></label>
       <label>Bisherige Wochenstunden
         <input type="number" class="stunden-alt" min="1" max="60" step="0.5" value="40"></label>
-      <label>Wochenstunden in Plus-Monaten <output class="o-plus"></output>
-        <input type="number" class="stunden-plus" min="0" max="60" step="0.5" value="20"></label>
-      <label>Wochenstunden in Bonus-Monaten (24–32) <output class="o-bonus"></output>
-        <input type="number" class="stunden-bonus" min="0" max="60" step="0.5" value="28"></label>
-      <details>
-        <summary>Teilzeit-Netto selbst eintragen (optional)</summary>
-        <label>Netto/Monat in Plus-Monaten, €
-          <input type="number" class="netto-plus" min="0" step="10" placeholder="Schätzung"></label>
-        <label>Netto/Monat in Bonus-Monaten, €
-          <input type="number" class="netto-bonus" min="0" step="10" placeholder="Schätzung"></label>
-      </details>
-      <p class="warn" hidden></p>
     </fieldset>
   </section>
 
@@ -58,23 +35,22 @@
     <label class="inline">Weitere Mehrlingskinder <input type="number" id="mehrlinge" min="0" max="5" value="0" style="width:4em"></label>
   </section>
 
-  <h2>Monatliche Berechnung</h2>
-  <div id="monat"></div>
+  <h2>Szenarien</h2>
+  <p class="hint">Jedes Szenario hat eigene Monate und Wochenstunden. Basis-Monate laufen ohne Arbeit. Der Partnerschaftsbonus (2–4 Monate) gilt für beide gleich und braucht 24–32 Std./Woche bei beiden.</p>
+  <div class="toolbar">
+    <button type="button" data-act="add">+ Neues Szenario</button>
+    <button type="button" data-act="reset" class="secondary">Beispiele wiederherstellen</button>
+  </div>
+  <div id="scen" class="scenarios"></div>
 
-  <h2>Szenarien im Vergleich</h2>
-  <p class="hint">„Verlust“ = Netto ohne Elternzeit in denselben Bezugsmonaten minus (Elterngeld + Teilzeitgehalt).</p>
-  <div class="scroll"><table id="szenarien"></table></div>
+  <h2>Gegenüberstellung</h2>
+  <div class="scroll"><table id="vergleich"></table></div>
+  <p class="hint">
+    <strong>Verlust beim Elterngeld</strong> = Elterngeld, das ohne Arbeit für dieselben Monate gezahlt würde, minus tatsächliches Elterngeld.<br>
+    <strong>Verlust ggü. Vollverdienst</strong> = Netto ohne Elternzeit in denselben Bezugsmonaten minus (Elterngeld + Teilzeit-Netto).
+  </p>
 
-  <h2>Eigene Aufteilung</h2>
-  <form id="custom" class="card grid">
-    <div></div><strong class="n1">Ich</strong><strong class="n2">Partnerin</strong>
-    <span>Basis-Monate</span><input type="number" min="0" max="14" value="12" data-k="p1.basis"><input type="number" min="0" max="14" value="2" data-k="p2.basis">
-    <span>Plus-Monate</span><input type="number" min="0" max="28" value="0" data-k="p1.plus"><input type="number" min="0" max="28" value="0" data-k="p2.plus">
-    <span>Bonus-Monate (0–4)</span><input type="number" min="0" max="4" value="0" data-k="p1.bonus"><input type="number" min="0" max="4" value="0" data-k="p2.bonus">
-  </form>
-  <div id="customOut"></div>
-
-  <p class="disclaimer">Unverbindliche Schätzung nach BEEG (Stand der Regeln: Geburten ab 2025). Maßgeblich ist der Bescheid deiner Elterngeldstelle. Das Teilzeit-Netto wird proportional zu den Stunden geschätzt; real sinkt das Netto weniger stark (Steuerprogression). Der offizielle Rechner liegt deshalb bei Teilzeit meist niedriger. Trage das Teilzeit-Netto aus deiner Prognose ein, wenn du es kennst. Nicht berücksichtigt: Einkommensgrenze (175.000 € zu versteuerndes Einkommen), Begrenzung gleichzeitigen Bezugs, Steuern auf das Teilzeitgehalt, Mutterschaftsgeld. Offizieller Rechner: <a href="https://www.bmfsfj.de/bmfsfj/service/elterngeld-plus-rechner" rel="noopener">BMFSFJ</a>.</p>
+  <p class="disclaimer">Unverbindliche Schätzung nach BEEG (Stand der Regeln: Geburten ab 2025). Maßgeblich ist der Bescheid deiner Elterngeldstelle. Das Teilzeit-Netto wird proportional zu den Stunden geschätzt; real sinkt das Netto weniger stark (Steuerprogression). Der offizielle Rechner liegt deshalb bei Teilzeit meist niedriger. Trage das Teilzeit-Netto aus deiner Prognose ein, wenn du es kennst. Nicht berücksichtigt: Einkommensgrenze (175.000 € zu versteuerndes Einkommen), Begrenzung gleichzeitigen Bezugs, Steuern auf das Teilzeitgehalt, Mutterschaftsgeld. Offizieller Rechner: <a href="https://familienportal.de/familienportal/meta/egr" rel="noopener">Familienportal</a>.</p>
 </main>
 <script src="calc.js"></script>
 <script src="app.js"></script>

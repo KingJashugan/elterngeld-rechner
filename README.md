@@ -11,6 +11,7 @@ Live: https://kingjashugan.github.io/elterngeld-rechner/
 - 12 Monate je Elternteil, 14 zusammen; Partnerschaftsbonus 4 Monate bei 24–32 Std./Woche beider
 - Geschwisterbonus +10 % (mind. 75 €/37,50 €), Mehrlinge +300 €/150 € je weiteres Kind
 - Eingabe in Wochenstunden: Teilzeit-Netto = bisheriges Netto × (neue Std. / bisherige Std.) – eine Näherung, die bei Teilzeit etwas zu hohes Elterngeld ergibt, weil das Netto real weniger stark sinkt (Steuerprogression). Optional kann das Teilzeit-Netto direkt eingetragen werden.
+- Eigene Szenarien: beliebig viele anlegen, kopieren und löschen (Monate Basis/Plus/Bonus je Elternteil, Wochenstunden je Szenario). Die Gegenüberstellung zeigt Verlust beim Elterngeld (gegenüber dem Elterngeld ohne Arbeit) und Verlust gegenüber dem Vollverdienst. Eingaben werden nur lokal im Browser (localStorage) gespeichert.
 - In Basis-Monaten wird nicht gearbeitet; Plus- und Bonus-Monate haben getrennte Wochenstunden
 - Elterngeld nur bis 32 Std./Woche; Partnerschaftsbonus nur bei 24–32 Std./Woche in den Bonus-Monaten
 

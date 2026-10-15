@@ -41,5 +41,20 @@ tr.invalid td { color: var(--muted); }
 .calc .sub { margin: 12px 0 4px; font-weight: 600; font-size: 14px; }
 .grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 8px 12px; align-items: center; }
 .err { color: var(--bad); font-size: 14px; }
+button { font: inherit; padding: 6px 12px; border: 1px solid var(--accent); border-radius: 6px; background: var(--accent); color: var(--bg); cursor: pointer; }
+button.secondary { background: transparent; color: var(--accent); }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.scenarios { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.shead { display: flex; gap: 6px; margin-bottom: 8px; }
+.shead .sname { flex: 1; min-width: 0; padding: 6px 8px; font: inherit; font-weight: 600; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
+.prow { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; padding: 8px 0; border-top: 1px solid var(--border); }
+.prow strong, .prow .ov { grid-column: 1 / -1; }
+.prow label, .card label.bonus { margin: 6px 0; }
+.card.scen input[type=number] { margin-top: 2px; }
+#vergleich th, #vergleich td { text-align: left; vertical-align: top; white-space: normal; min-width: 150px; }
+#vergleich th[scope=row] { min-width: 160px; position: sticky; left: 0; background: var(--card); }
+#vergleich td.best { background: color-mix(in srgb, var(--ok) 14%, transparent); }
+#vergleich td.na { color: var(--muted); }
+#vergleich small { color: var(--muted); font-weight: normal; }
 .disclaimer { margin-top: 32px; font-size: 13px; color: var(--muted); }
 a { color: var(--accent); }

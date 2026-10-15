@@ -1,112 +1,191 @@
 (function () {
   const E = window.Elterngeld;
+  const KEY = 'egr-state-v1';
   const eur = (x) => x.toLocaleString('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
-  const eur2 = (x) => x.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
-  const pct = (x) => (x * 100).toLocaleString('de-DE', { maximumFractionDigits: 1 }) + ' %';
+  const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0) + ' %';
   const $ = (s, r) => (r || document).querySelector(s);
-  const esc = (s) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const $$ = (s, r) => [...(r || document).querySelectorAll(s)];
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const num = (v) => Math.max(0, parseFloat(v) || 0);
+  const opt = (v) => { const x = parseFloat(v); return Number.isFinite(x) ? Math.max(0, x) : undefined; };
 
-  function readParent(id) {
-    const el = $('#' + id);
-    return {
-      name: $('.name', el).value.trim() || id,
-      netto: Math.max(0, parseFloat($('.netto', el).value) || 0),
-      stundenAlt: Math.max(1, parseFloat($('.stunden-alt', el).value) || 0),
-      stundenPlus: Math.max(0, parseFloat($('.stunden-plus', el).value) || 0),
-      stundenBonus: Math.max(0, parseFloat($('.stunden-bonus', el).value) || 0),
-      nettoPlus: optNum($('.netto-plus', el)),
-      nettoBonus: optNum($('.netto-bonus', el)),
-    };
+  // ---------- Zustand ----------
+  const sp = (o) => ({ basis: 0, plus: 0, hPlus: 20, hBonus: 28, nettoPlus: undefined, nettoBonus: undefined, ...o });
+  let nextId = 1;
+  const scen = (name, p1, p2, bonus) => ({ id: nextId++, name, p1: sp(p1), p2: sp(p2), bonus: bonus || 0 });
+  const beispiele = () => [
+    scen('12 + 2 Monate Basis', { basis: 12 }, { basis: 2 }),
+    scen('7 + 7 Monate Basis', { basis: 7 }, { basis: 7 }),
+    scen('Plus 14 + 14, je 20 Std.', { plus: 14 }, { plus: 14 }),
+    scen('Plus 14 + 14 mit Bonus 4, Bonus je 28 Std.', { plus: 14 }, { plus: 14 }, 4),
+  ];
+  const state = {
+    parents: [
+      { name: 'Ich', netto: 3000, stundenAlt: 40 },
+      { name: 'Partnerin', netto: 2200, stundenAlt: 40 },
+    ],
+    geschwister: false, mehrlinge: 0,
+    scenarios: beispiele(),
+  };
+
+  function load() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(KEY));
+      if (!raw || !Array.isArray(raw.scenarios) || !Array.isArray(raw.parents) || raw.parents.length !== 2) return;
+      state.parents = raw.parents.map((p) => ({ name: String(p.name || ''), netto: num(p.netto), stundenAlt: Math.max(1, num(p.stundenAlt)) }));
+      state.geschwister = !!raw.geschwister;
+      state.mehrlinge = Math.min(5, num(raw.mehrlinge));
+      state.scenarios = raw.scenarios.map((s) => scen(String(s.name || ''), s.p1 || {}, s.p2 || {}, num(s.bonus)));
+    } catch (e) { /* ohne Speicher weiterarbeiten */ }
+  }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ignorieren */ }
   }
 
-  function optNum(input) {
-    const v = parseFloat(input.value);
-    return Number.isFinite(v) ? Math.max(0, v) : undefined;
-  }
-
-  function monatBlock(p, e) {
-    const row = (k, v, cls) => `<dt>${k}</dt><dd${cls ? ` class="${cls}"` : ''}>${v}</dd>`;
-    const kapp = (k) => (k === 'min' ? ' (Mindestbetrag)' : k === 'max' ? ' (Höchstbetrag)' : '');
-    const b = e.basis;
-    const h = (x) => x.toLocaleString('de-DE');
-    const effekt = (m, netto) => row('Haushalts-Effekt / Monat', eur2(m + netto - p.netto), m + netto - p.netto < 0 ? 'neg' : '');
-    const plusBlock = (titel, x, label) => `
-      <p class="sub">${titel}</p><dl>
-      ${row('Netto in Elternzeit', eur2(x.nettoNachher))}
-      ${row('Max. (½ Basis ohne Einkommen)', eur2(x.halbOhneEinkommen))}
-      ${row('Anteil aus Einkommensausfall', eur2(Math.round(x.rate * x.diff * 100) / 100))}
-      ${row(label + ' / Monat' + kapp(x.kappung), eur2(x.mitZuschlag), 'ok')}
-      ${effekt(x.mitZuschlag, x.nettoNachher)}
-      </dl>`;
-    return `<div class="card"><h3>${esc(p.name)}</h3><dl>
-      ${row('Netto vor Geburt', eur2(p.netto))}
-      ${row('Berücksichtigt (max. 2.770 €)', eur2(b.bemessung))}
-      ${row('Ersatzrate', pct(b.rate))}
-      </dl>
-      <p class="sub">Basiselterngeld (ohne Arbeit)</p><dl>
-      ${row('Wegfallendes Einkommen', eur2(b.diff))}
-      ${row('× Ersatzrate', eur2(b.roh))}
-      ${row('Elterngeld / Monat' + kapp(b.kappung), eur2(b.mitZuschlag), 'ok')}
-      ${effekt(b.mitZuschlag, 0)}
-      </dl>
-      ${plusBlock(`ElterngeldPlus bei ${h(p.stundenPlus)} von ${h(p.stundenAlt)} Std./Woche`, e.plus, 'Plus')}
-      ${plusBlock(`Partnerschaftsbonus bei ${h(p.stundenBonus)} von ${h(p.stundenAlt)} Std./Woche`, e.bonus, 'Bonus')}
-      </div>`;
-  }
-
-  function planLabel(pl, n1, n2) {
-    const f = (x) => [x.basis && `${x.basis}× Basis`, x.plus && `${x.plus}× Plus`, x.bonus && `${x.bonus}× Bonus`].filter(Boolean).join(', ') || '–';
-    return `${esc(n1)}: ${f(pl.p1)} · ${esc(n2)}: ${f(pl.p2)}`;
-  }
-
-  function render() {
-    const p1 = readParent('p1'), p2 = readParent('p2');
-    $('.n1').textContent = p1.name; $('.n2').textContent = p2.name;
-    const opts = { geschwister: $('#geschwister').checked, mehrlinge: parseInt($('#mehrlinge').value, 10) || 0 };
-    const e1 = E.elternteil(p1, opts), e2 = E.elternteil(p2, opts);
-    [['p1', p1, e1], ['p2', p2, e2]].forEach(([id, p, e]) => {
+  // ---------- Eingaben lesen / schreiben ----------
+  function readDom() {
+    ['p1', 'p2'].forEach((id, i) => {
       const el = $('#' + id);
-      $('.o-plus', el).textContent = `(${Math.round(e.plus.anteil * 100)} % der bisherigen Arbeit)`;
-      $('.o-bonus', el).textContent = `(${Math.round(e.bonus.anteil * 100)} %)`;
-      const warn = [];
-      if (!e.plusErlaubt) warn.push('Über 32 Std./Woche in Plus-Monaten: kein Elterngeld.');
-      if (!e.bonusMoeglich) warn.push('Partnerschaftsbonus braucht 24–32 Std./Woche in den Bonus-Monaten.');
-      const w = $('.warn', el);
-      w.textContent = warn.join(' ');
-      w.hidden = warn.length === 0;
+      state.parents[i] = {
+        name: $('.name', el).value.trim() || 'Elternteil ' + (i + 1),
+        netto: num($('.netto', el).value),
+        stundenAlt: Math.max(1, num($('.stunden-alt', el).value)),
+      };
     });
-
-    $('#monat').innerHTML = `<div class="calc">${monatBlock(p1, e1)}${monatBlock(p2, e2)}</div>`;
-
-    const rows = E.standardPlaene().map((pl) => ({ pl, r: E.szenario(pl, e1, e2, p1, p2) }));
-    const valid = rows.filter((x) => x.r.fehler.length === 0);
-    const maxEg = Math.max(1, ...valid.map((x) => x.r.elterngeld));
-    const best = valid.reduce((a, b) => (!a || b.r.elterngeld > a.r.elterngeld ? b : a), null);
-    valid.sort((a, b) => b.r.elterngeld - a.r.elterngeld);
-    const invalid = rows.filter((x) => x.r.fehler.length > 0);
-    const tr = (x, ok) => ok
-      ? `<tr${x === best ? ' class="best"' : ''}><td>${esc(x.pl.name)}<br><small>${planLabel(x.pl, p1.name, p2.name)}</small></td>
-          <td>${eur(x.r.elterngeld)}<span class="bar" style="width:${(x.r.elterngeld / maxEg) * 100}%"></span></td>
-          <td>${eur(x.r.lohn)}</td><td>${eur(x.r.gesamt)}</td>
-          <td class="${x.r.verlust > 0 ? 'neg' : ''}">${eur(x.r.verlust)}</td></tr>`
-      : `<tr class="invalid"><td>${esc(x.pl.name)}<br><small>${esc(x.r.fehler[0])}</small></td><td colspan="4">nicht möglich</td></tr>`;
-    $('#szenarien').innerHTML = `<tr><th>Szenario</th><th>Elterngeld gesamt</th><th>Teilzeitgehalt</th><th>Summe</th><th>Verlust ggü. Vollverdienst</th></tr>`
-      + valid.map((x) => tr(x, true)).join('') + invalid.map((x) => tr(x, false)).join('');
-
-    // Eigene Aufteilung
-    const plan = { p1: { basis: 0, plus: 0, bonus: 0 }, p2: { basis: 0, plus: 0, bonus: 0 } };
-    document.querySelectorAll('#custom [data-k]').forEach((i) => {
-      const [who, what] = i.dataset.k.split('.');
-      plan[who][what] = Math.max(0, parseFloat(i.value) || 0);
+    state.geschwister = $('#geschwister').checked;
+    state.mehrlinge = Math.min(5, Math.floor(num($('#mehrlinge').value)));
+    $$('.scen').forEach((el, i) => {
+      const s = state.scenarios[i];
+      if (!s) return;
+      s.name = $('.sname', el).value;
+      s.bonus = Math.floor(num($('[data-k=bonus]', el).value));
+      ['p1', 'p2'].forEach((p) => {
+        const g = (k) => $(`[data-k="${p}.${k}"]`, el).value;
+        s[p] = { basis: Math.floor(num(g('basis'))), plus: Math.floor(num(g('plus'))), hPlus: num(g('hPlus')), hBonus: num(g('hBonus')), nettoPlus: opt(g('nettoPlus')), nettoBonus: opt(g('nettoBonus')) };
+      });
     });
-    const r = E.szenario(plan, e1, e2, p1, p2);
-    const t = (n, x) => `<tr><td>${esc(n)}</td><td>${x.monate}</td><td>${eur(x.elterngeld)}</td><td>${eur(x.lohn)}</td><td>${eur(x.gesamt)}</td><td class="${x.verlust > 0 ? 'neg' : ''}">${eur(x.verlust)}</td></tr>`;
-    $('#customOut').innerHTML = (r.fehler.length ? `<p class="err">${r.fehler.map(esc).join('<br>')}</p>` : '')
-      + `<div class="scroll"><table><tr><th></th><th>Monate</th><th>Elterngeld</th><th>Teilzeitgehalt</th><th>Summe</th><th>Verlust</th></tr>`
-      + t(p1.name, r.t1) + t(p2.name, r.t2)
-      + `<tr class="best"><td>Zusammen</td><td>${r.t1.monate + r.t2.monate}</td><td>${eur(r.elterngeld)}</td><td>${eur(r.lohn)}</td><td>${eur(r.gesamt)}</td><td>${eur(r.verlust)}</td></tr></table></div>`;
   }
 
-  document.addEventListener('input', render);
-  render();
+  function writeParents() {
+    ['p1', 'p2'].forEach((id, i) => {
+      const el = $('#' + id), p = state.parents[i];
+      $('.name', el).value = p.name; $('.netto', el).value = p.netto; $('.stunden-alt', el).value = p.stundenAlt;
+    });
+    $('#geschwister').checked = state.geschwister;
+    $('#mehrlinge').value = state.mehrlinge;
+  }
+
+  // ---------- Szenario-Karten ----------
+  function cardHtml(s) {
+    const row = (p, i) => `
+      <div class="prow">
+        <strong class="pn">${esc(state.parents[i].name)}</strong>
+        <label>Basis-Monate<input type="number" min="0" max="14" step="1" data-k="${p}.basis" value="${s[p].basis}"></label>
+        <label>Plus-Monate<input type="number" min="0" max="28" step="1" data-k="${p}.plus" value="${s[p].plus}"></label>
+        <label>Std./Woche Plus<input type="number" min="0" max="60" step="0.5" data-k="${p}.hPlus" value="${s[p].hPlus}"></label>
+        <label>Std./Woche Bonus<input type="number" min="0" max="60" step="0.5" data-k="${p}.hBonus" value="${s[p].hBonus}"></label>
+        <details class="ov">
+          <summary>Teilzeit-Netto selbst eintragen</summary>
+          <label>Netto Plus, €<input type="number" min="0" step="10" placeholder="Schätzung" data-k="${p}.nettoPlus" value="${s[p].nettoPlus ?? ''}"></label>
+          <label>Netto Bonus, €<input type="number" min="0" step="10" placeholder="Schätzung" data-k="${p}.nettoBonus" value="${s[p].nettoBonus ?? ''}"></label>
+        </details>
+      </div>`;
+    return `<div class="card scen" data-id="${s.id}">
+      <div class="shead">
+        <input type="text" class="sname" value="${esc(s.name)}" placeholder="Name des Szenarios" aria-label="Name des Szenarios">
+        <button type="button" data-act="dup" class="secondary" title="Duplizieren">Kopie</button>
+        <button type="button" data-act="del" class="secondary" title="Löschen">Löschen</button>
+      </div>
+      ${row('p1', 0)}${row('p2', 1)}
+      <label class="bonus">Bonus-Monate (beide, 0 oder 2–4)<input type="number" min="0" max="4" step="1" data-k="bonus" value="${s.bonus}"></label>
+      <p class="warn" hidden></p>
+    </div>`;
+  }
+
+  function renderCards() {
+    $('#scen').innerHTML = state.scenarios.map(cardHtml).join('');
+  }
+
+  // ---------- Berechnung ----------
+  function compute() {
+    const opts = { geschwister: state.geschwister, mehrlinge: state.mehrlinge };
+    const [a, b] = state.parents;
+    return state.scenarios.map((s) => {
+      const mk = (par, x) => ({ netto: par.netto, stundenAlt: par.stundenAlt, stundenPlus: x.hPlus, stundenBonus: x.hBonus, nettoPlus: x.nettoPlus, nettoBonus: x.nettoBonus });
+      const e1 = E.elternteil(mk(a, s.p1), opts), e2 = E.elternteil(mk(b, s.p2), opts);
+      const plan = { p1: { basis: s.p1.basis, plus: s.p1.plus, bonus: s.bonus }, p2: { basis: s.p2.basis, plus: s.p2.plus, bonus: s.bonus } };
+      const r = E.szenario(plan, e1, e2, a, b);
+      const warn = [...r.fehler];
+      if (r.monate === 0) warn.push('Keine Monate eingetragen.');
+      return { s, r, warn, ok: warn.length === 0 };
+    });
+  }
+
+  function renderResults() {
+    const res = compute();
+    $$('.scen').forEach((el, i) => {
+      const w = $('.warn', el), x = res[i];
+      w.textContent = x.warn.join(' · ');
+      w.hidden = x.ok;
+    });
+
+    const valid = res.filter((x) => x.ok);
+    const bestSumme = Math.max(...valid.map((x) => x.r.gesamt), 0);
+    const bestVerlust = Math.min(...valid.map((x) => x.r.verlust), Infinity);
+    const bestEg = Math.min(...valid.map((x) => x.r.verlustElterngeld), Infinity);
+    const [n1, n2] = state.parents.map((p) => esc(p.name));
+    const cell = (x, fn, cls) => `<td class="${x.ok ? (cls ? cls(x) : '') : 'na'}">${x.ok ? fn(x) : '–'}</td>`;
+    const rows = [
+      ['Monate', (x) => `${esc(n1)}: ${x.s.p1.basis} Basis, ${x.s.p1.plus} Plus<br>${esc(n2)}: ${x.s.p2.basis} Basis, ${x.s.p2.plus} Plus<br>Bonus: ${x.s.bonus} je Elternteil`, null],
+      ['Std./Woche', (x) => [[n1, x.s.p1], [n2, x.s.p2]].map(([n, p]) => {
+        const t = [p.plus > 0 && `Plus ${p.hPlus}`, x.s.bonus > 0 && `Bonus ${p.hBonus}`].filter(Boolean).join(', ');
+        return `${esc(n)}: ${t || 'keine Arbeit'}`;
+      }).join('<br>'), null],
+      ['Elterngeld gesamt', (x) => `<strong>${eur(x.r.elterngeld)}</strong><br><small>${esc(n1)} ${eur(x.r.t1.elterngeld)} · ${esc(n2)} ${eur(x.r.t2.elterngeld)}</small>`, null],
+      ['Teilzeit-Netto in Bezugsmonaten', (x) => eur(x.r.lohn), null],
+      ['Einkommen gesamt (Elterngeld + Teilzeit)', (x) => `<strong>${eur(x.r.gesamt)}</strong><span class="bar" style="width:${bestSumme ? (x.r.gesamt / bestSumme) * 100 : 0}%"></span>`, (x) => (x.r.gesamt === bestSumme ? 'best' : '')],
+      ['Max. Elterngeld ohne Arbeit', (x) => eur(x.r.maximum), null],
+      ['Verlust beim Elterngeld', (x) => `<strong class="neg">${eur(x.r.verlustElterngeld)}</strong><br><small>${pct(x.r.verlustElterngeld, x.r.maximum)} vom Maximum</small>`, (x) => (x.r.verlustElterngeld === bestEg ? 'best' : '')],
+      ['Netto bei Vollverdienst (gleiche Monate)', (x) => eur(x.r.referenz), null],
+      ['Verlust ggü. Vollverdienst', (x) => `<strong class="neg">${eur(x.r.verlust)}</strong><br><small>${pct(x.r.verlust, x.r.referenz)} vom Vollverdienst</small>`, (x) => (x.r.verlust === bestVerlust ? 'best' : '')],
+    ];
+    const head = `<tr><th></th>${res.map((x) => `<th>${esc(x.s.name || 'Szenario')}${x.ok ? '' : '<br><small class="neg">ungültig</small>'}</th>`).join('')}</tr>`;
+    const body = rows.map(([label, fn, cls]) => `<tr><th scope="row">${label}</th>${res.map((x) => cell(x, fn, cls)).join('')}</tr>`).join('');
+    $('#vergleich').innerHTML = res.length ? head + body : '<tr><td>Noch kein Szenario. Mit „+ Neues Szenario“ anlegen.</td></tr>';
+  }
+
+  function update() {
+    readDom();
+    $$('.pn').forEach((el, i) => { el.textContent = state.parents[i % 2].name; });
+    save();
+    renderResults();
+  }
+
+  // ---------- Aktionen ----------
+  function act(a, id) {
+    readDom();
+    const i = state.scenarios.findIndex((s) => String(s.id) === String(id));
+    if (a === 'add') state.scenarios.push(scen('Szenario ' + (state.scenarios.length + 1), { basis: 12 }, { basis: 2 }));
+    else if (a === 'dup' && i >= 0) {
+      const c = JSON.parse(JSON.stringify(state.scenarios[i]));
+      state.scenarios.splice(i + 1, 0, scen((c.name || 'Szenario') + ' (Kopie)', c.p1, c.p2, c.bonus));
+    } else if (a === 'del' && i >= 0) state.scenarios.splice(i, 1);
+    else if (a === 'reset') state.scenarios = beispiele();
+    else return;
+    save();
+    renderCards();
+    renderResults();
+  }
+
+  document.addEventListener('input', update);
+  document.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-act]');
+    if (b) act(b.dataset.act, b.closest('.scen')?.dataset.id);
+  });
+
+  load();
+  writeParents();
+  renderCards();
+  $$('.pn').forEach((el, i) => { el.textContent = state.parents[i % 2].name; });
+  renderResults();
 })();

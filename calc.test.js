@@ -82,6 +82,14 @@ test('Szenario-Validierung und Summen', () => {
   assert.ok(zuViel.fehler.length > 0);
   const bonus = E.szenario({ p1: { basis: 0, plus: 14, bonus: 4 }, p2: { basis: 0, plus: 14, bonus: 4 } }, e, e, p, p);
   assert.equal(bonus.fehler.length, 0);
+  // Verlust beim Elterngeld: Maximum ohne Arbeit minus tatsächliches Elterngeld
+  const plusTz = E.szenario({ p1: { basis: 0, plus: 10, bonus: 0 }, p2: { basis: 0, plus: 0, bonus: 0 } }, e, e, p, p);
+  near(plusTz.maximum, 10 * 650);
+  near(plusTz.elterngeld, 10 * E.plusMonat(2000, 2000 * 0.75).betrag);
+  near(plusTz.verlustElterngeld, plusTz.maximum - plusTz.elterngeld);
+  near(ok.verlustElterngeld, 0); // Basis ohne Arbeit = Maximum
+  const einMonatBonus = E.szenario({ p1: { basis: 0, plus: 0, bonus: 1 }, p2: { basis: 0, plus: 0, bonus: 1 } }, e, e, p, p);
+  assert.ok(einMonatBonus.fehler.some((f) => f.includes('mindestens 2')));
   const q = { ...p, stundenBonus: 20 };
   const eq = E.elternteil(q, o);
   const kein = E.szenario({ p1: { basis: 0, plus: 14, bonus: 4 }, p2: { basis: 0, plus: 14, bonus: 4 } }, eq, e, q, p);

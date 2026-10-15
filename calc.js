@@ -83,8 +83,14 @@
     const b = basisMonat(p.netto, 0);
     const pl = plusMonat(p.netto, nPlus);
     const bo = plusMonat(p.netto, nBonus); // Bonusmonat wird wie ein Plusmonat berechnet
+    const plusOhne = plusMonat(p.netto, 0);
     return {
       basis: { ...b, mitZuschlag: zuschlaege(b.betrag, 'basis', opts) },
+      // Höchstbeträge ohne Arbeit (Referenz für den Verlust beim Elterngeld)
+      ohneArbeit: {
+        basis: zuschlaege(b.betrag, 'basis', opts),
+        plus: zuschlaege(plusOhne.betrag, 'plus', opts),
+      },
       plus: { ...pl, nettoNachher: nPlus, anteil: anteil(p.stundenPlus), mitZuschlag: zuschlaege(pl.betrag, 'plus', opts) },
       bonus: { ...bo, nettoNachher: nBonus, anteil: anteil(p.stundenBonus), mitZuschlag: zuschlaege(bo.betrag, 'plus', opts) },
       // Elterngeld nur bis 32 Wochenstunden; Partnerschaftsbonus nur bei 24–32 Wochenstunden
@@ -105,6 +111,7 @@
     if (bonus > 0) {
       if (plan.p1.bonus !== plan.p2.bonus) fehler.push('Partnerschaftsbonus: beide gleich viele Monate');
       if (plan.p1.bonus > C.BONUS_MONTHS) fehler.push('Partnerschaftsbonus: max. 4 Monate');
+      if (plan.p1.bonus < 2) fehler.push('Partnerschaftsbonus: mindestens 2 Monate');
       if (!e1.bonusMoeglich || !e2.bonusMoeglich) fehler.push('Partnerschaftsbonus: beide müssen 24–32 Std./Woche arbeiten');
     }
 
@@ -120,42 +127,31 @@
       const lohn = pl.plus * e.plus.nettoNachher + pl.bonus * e.bonus.nettoNachher;
       const monate = pl.basis + pl.plus + pl.bonus;
       const referenz = monate * p.netto; // Netto ohne Elternzeit in denselben Monaten
+      // Elterngeld, das ohne Arbeit für dieselben Monate gezahlt würde
+      const maximum = pl.basis * e.ohneArbeit.basis + (pl.plus + pl.bonus) * e.ohneArbeit.plus;
       return {
         elterngeld: round2(elterngeld), lohn: round2(lohn), monate,
         gesamt: round2(elterngeld + lohn), referenz: round2(referenz),
         verlust: round2(referenz - elterngeld - lohn),
+        maximum: round2(maximum), verlustElterngeld: round2(maximum - elterngeld),
       };
     };
     const t1 = teil(e1, plan.p1, p1);
     const t2 = teil(e2, plan.p2, p2);
     return {
       fehler, t1, t2,
+      monate: t1.monate + t2.monate,
       elterngeld: round2(t1.elterngeld + t2.elterngeld),
       lohn: round2(t1.lohn + t2.lohn),
       gesamt: round2(t1.gesamt + t2.gesamt),
       referenz: round2(t1.referenz + t2.referenz),
       verlust: round2(t1.verlust + t2.verlust),
+      maximum: round2(t1.maximum + t2.maximum),
+      verlustElterngeld: round2(t1.verlustElterngeld + t2.verlustElterngeld),
     };
   }
 
-  // Standard-Szenarien zum Vergleich.
-  function standardPlaene() {
-    const z = (b, p, bo) => ({ basis: b, plus: p, bonus: bo || 0 });
-    const basisPlaene = [
-      { id: 'A', name: '12 + 2 Basis (Elternteil 1 lang)', p1: z(12, 0), p2: z(2, 0) },
-      { id: 'B', name: '12 + 2 Basis (Elternteil 2 lang)', p1: z(2, 0), p2: z(12, 0) },
-      { id: 'C', name: '7 + 7 Basis', p1: z(7, 0), p2: z(7, 0) },
-      { id: 'D', name: 'ElterngeldPlus: 24 + 4 Monate', p1: z(0, 24), p2: z(0, 4) },
-      { id: 'E', name: 'ElterngeldPlus: 14 + 14 Monate', p1: z(0, 14), p2: z(0, 14) },
-    ];
-    const mitBonus = basisPlaene.map((s) => ({
-      id: s.id + '+', name: s.name + ' + Partnerschaftsbonus',
-      p1: { ...s.p1, bonus: C.BONUS_MONTHS }, p2: { ...s.p2, bonus: C.BONUS_MONTHS },
-    }));
-    return basisPlaene.concat(mitBonus);
-  }
-
-  const api = { C, ersatzrate, basisMonat, plusMonat, zuschlaege, elternteil, szenario, standardPlaene };
+  const api = { C, ersatzrate, basisMonat, plusMonat, zuschlaege, elternteil, szenario };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Elterngeld = api;
 })(typeof self !== 'undefined' ? self : this);
