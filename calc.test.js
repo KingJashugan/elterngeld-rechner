@@ -54,21 +54,25 @@ test('Abgleich mit offiziellem Rechner', () => {
   near(E.plusMonat(3100, 0).betrag, 900, 0.01);
 });
 
-test('Stunden statt Prozent', () => {
-  const p = { netto: 2000, stundenAlt: 40, stundenBasis: 0, stundenPlus: 20 };
+test('Stunden statt Prozent, Plus und Bonus getrennt', () => {
+  const p = { netto: 2000, stundenAlt: 40, stundenPlus: 20, stundenBonus: 30 };
   const e = E.elternteil(p, {});
+  near(e.basis.betrag, 1300); // Basis: immer ohne Arbeit
   near(e.plus.nettoNachher, 1000);
   near(e.plus.anteil, 0.5, 1e-9);
   near(e.plus.betrag, 650);
-  assert.equal(e.bonusMoeglich, false); // 20 h < 24 h
-  assert.equal(E.elternteil({ ...p, stundenPlus: 30 }, {}).bonusMoeglich, true);
-  const ueber = E.elternteil({ ...p, stundenBasis: 36 }, {});
-  assert.equal(ueber.basisErlaubt, false);
+  near(e.bonus.nettoNachher, 1500); // Bonus mit eigenen Stunden
+  near(e.bonus.betrag, 325);
+  assert.equal(e.bonusMoeglich, true); // Bonus-Stunden 30 h
+  assert.equal(E.elternteil({ ...p, stundenBonus: 20 }, {}).bonusMoeglich, false);
+  assert.equal(E.elternteil({ ...p, stundenBonus: 36 }, {}).bonusMoeglich, false);
+  assert.equal(E.elternteil({ ...p, stundenPlus: 36 }, {}).plusErlaubt, false);
   near(E.elternteil({ ...p, nettoPlus: 1200 }, {}).plus.nettoNachher, 1200); // Override
+  near(E.elternteil({ ...p, nettoBonus: 1200 }, {}).bonus.nettoNachher, 1200);
 });
 
 test('Szenario-Validierung und Summen', () => {
-  const p = { netto: 2000, stundenAlt: 40, stundenBasis: 0, stundenPlus: 30 };
+  const p = { netto: 2000, stundenAlt: 40, stundenPlus: 30, stundenBonus: 30 };
   const o = {};
   const e = E.elternteil(p, o);
   const ok = E.szenario({ p1: { basis: 12, plus: 0, bonus: 0 }, p2: { basis: 2, plus: 0, bonus: 0 } }, e, e, p, p);
@@ -78,7 +82,7 @@ test('Szenario-Validierung und Summen', () => {
   assert.ok(zuViel.fehler.length > 0);
   const bonus = E.szenario({ p1: { basis: 0, plus: 14, bonus: 4 }, p2: { basis: 0, plus: 14, bonus: 4 } }, e, e, p, p);
   assert.equal(bonus.fehler.length, 0);
-  const q = { ...p, stundenPlus: 20 };
+  const q = { ...p, stundenBonus: 20 };
   const eq = E.elternteil(q, o);
   const kein = E.szenario({ p1: { basis: 0, plus: 14, bonus: 4 }, p2: { basis: 0, plus: 14, bonus: 4 } }, eq, e, q, p);
   assert.ok(kein.fehler.some((f) => f.includes('24–32')));
