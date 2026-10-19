@@ -5,11 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Elterngeld-Rechner</title>
   <meta name="description" content="Legt eigene Elterngeld-Szenarien für zwei Elternteile an und stellt sie gegenüber. Berechnung nur im Browser.">
+  <script>try { var t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}</script>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <main>
-  <h1>Elterngeld-Rechner</h1>
+  <div class="topbar">
+    <h1>Elterngeld-Rechner</h1>
+    <button type="button" id="themeToggle" aria-label="Farbmodus wechseln"></button>
+  </div>
   <p class="lead">Legt eigene Szenarien an (wie viele Monate Basis, Plus und Bonus, bei wie vielen Wochenstunden) und stellt sie gegenüber. Alles wird nur in deinem Browser berechnet. Eingaben bleiben lokal in diesem Browser gespeichert und werden nie gesendet.</p>
 
   <h2>Eure Daten</h2>
@@ -76,5 +80,6 @@
 </main>
 <script src="calc.js"></script>
 <script src="app.js"></script>
+<script src="theme.js"></script>
 </body>
 </html>
